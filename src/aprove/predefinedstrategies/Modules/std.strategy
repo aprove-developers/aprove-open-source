@@ -1861,4 +1861,4 @@ declare ModularConstructorSharingProcessor = aprove.verification.confluence.Modu
 declare StrongConfluenceProcessor = aprove.verification.confluence.StrongConfluenceProcessor
 declare NonConfluenceProcessor = aprove.verification.confluence.NonConfluenceProcessor
 declare ModularComposableTRSProcessor = aprove.verification.confluence.ModularComposableTRSProcessor
-
+declare DecreasingDiagramsRuleLabellingProcessor = aprove.verification.confluence.DecreasingDiagramsRuleLabellingProcessor

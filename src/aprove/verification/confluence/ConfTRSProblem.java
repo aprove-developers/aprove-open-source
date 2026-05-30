@@ -238,7 +238,7 @@ public class ConfTRSProblem extends DefaultBasicObligation
     }
 
     private boolean calculateLinearity() {
-        if (this.isLeftLinear() == false)
+        if (!this.isLeftLinear())
             return false;
 
         for (Rule rule : this.rules)

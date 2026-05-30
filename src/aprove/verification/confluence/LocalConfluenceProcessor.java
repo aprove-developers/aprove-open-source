@@ -8,6 +8,8 @@ import aprove.strategies.ExecutableStrategies.*;
 import aprove.verification.confluence.Utility.*;
 import aprove.verification.dpframework.*;
 import aprove.verification.dpframework.BasicStructures.*;
+import aprove.verification.oldframework.Utility.GenericStructures.Pair;
+import immutables.ImmutableList;
 
 
 public class LocalConfluenceProcessor implements Processor {
@@ -26,7 +28,7 @@ public class LocalConfluenceProcessor implements Processor {
         switch(localConfluence) {
             case WCR:
             case WCR_DONE:
-                Map<CriticalPairInfo, TRSTerm> m = cps.getFoundJoinable();
+                Map<CriticalPairInfo, Pair<ImmutableList<RewriteStep>, ImmutableList<RewriteStep>>> m = cps.getFoundJoinable();
                 return ResultFactory.proved(new WCRProof(m));
             case NOTCR:
                 return ResultFactory.disproved(new NotCRProof(cps.getCounterExampleCR()));

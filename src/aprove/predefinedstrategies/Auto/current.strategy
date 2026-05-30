@@ -2154,13 +2154,15 @@ conf_trs_toyama = First(
 			conf_atomic_trs
 			)
 
+conf_trs_decreasing_diagram = DecreasingDiagramsRuleLabellingProcessor[Order = POLO[Degree = 1, Engine = SMTLIB]]
+#conf_trs_decreasing_diagram = DecreasingDiagramsRuleLabellingProcessor[Order = POLO[Degree = 1, Engine = MINISAT]]
 
 conf_trs = First(
-			ConfOrthogonalProcessor,
-			StrongConfluenceProcessor,
-			DisjointUnionProcessor : conf_trs_toyama,
-			ModularConstructorSharingProcessor : conf_trs_mop,
-      ModularComposableTRSProcessor : conf_trs_comp,
-      conf_atomic_trs
+            conf_trs_decreasing_diagram
+			#ConfOrthogonalProcessor,
+			#StrongConfluenceProcessor,
+			#DisjointUnionProcessor : conf_trs_toyama,
+			#ModularConstructorSharingProcessor : conf_trs_mop,
+            #ModularComposableTRSProcessor : conf_trs_comp,
+            #conf_atomic_trs
 		)
-			          

@@ -11,34 +11,25 @@ import aprove.verification.oldframework.Utility.GenericStructures.*;
 
 
 public class NotCRProof extends DefaultProof {
-    private List<TRSTerm> terms;
-    private TRSTerm r;
-    
-    public NotCRProof(CriticalPairInfo disproof, TRSTerm s, TRSTerm t) {
-        this.r = disproof.divergence();
-        this.terms = Arrays.asList(s, t);
+    private final JoinableResult.NonConfluent nonConfluentResult;
+
+    NotCRProof(JoinableResult.NonConfluent nonConfluentResult) {
+        this.nonConfluentResult = nonConfluentResult;
     }
 
-    public NotCRProof(Triple<CriticalPairInfo, TRSTerm, TRSTerm> c) {
-        this(c.getX(), c.getY(), c.getZ());
-    }
     @Override
     public String export(Export_Util o, VerbosityLevel level) {
-        final Iterator iter = terms.iterator();
-        final StringBuilder s = new StringBuilder();
-        s.append(o.export("The TRS is not confluent:"));
-        s.append(o.cond_linebreak());
-        s.append(o.export("The following term leads to following normal forms:"));
-        s.append(o.cond_linebreak());
-        s.append(o.cond_linebreak());
-        s.append(o.export(this.r));
-        s.append(o.linebreak());
-        s.append(o.export("->* "));
-        s.append(o.export(iter.next()));
-        s.append(o.linebreak());
-        s.append(o.export("->* "));
-        s.append(o.export(iter.next()));
-        return s.toString();
+        return o.export("The TRS is not confluent:") +
+                o.cond_linebreak() +
+                o.export("The following term leads to following normal forms:") +
+                o.cond_linebreak() +
+                o.cond_linebreak() +
+                o.export(nonConfluentResult.leftNormalForm().getFirst().originalTerm()) +
+                o.linebreak() +
+                o.export("->* ") +
+                o.export(nonConfluentResult.leftNormalForm().getLast().substitutedTerm()) +
+                o.linebreak() +
+                o.export("->* ") +
+                o.export(nonConfluentResult.rightNormalForm().getLast().substitutedTerm());
     }
-
 }

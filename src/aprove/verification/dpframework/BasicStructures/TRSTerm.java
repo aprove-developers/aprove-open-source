@@ -7,6 +7,7 @@ import java.math.*;
 import java.util.*;
 import java.util.Map.*;
 
+import aprove.verification.confluence.RewriteStep;
 import org.apache.commons.math3.fraction.*;
 import org.w3c.dom.*;
 
@@ -332,7 +333,7 @@ public abstract class TRSTerm
 
     /**
      * docu-guess (fuhs):
-     * Returns the longest prefix p of pos such that root(t|p)
+     * Returns the longest prefix subLeftPos of pos such that root(t|subLeftPos)
      * is a function symbol (and well-defined, of course).
      *
      * @return
@@ -569,7 +570,7 @@ public abstract class TRSTerm
     }
 
     /**
-     * @return this.containsVariablesAsOften(that) returns true  iff 
+     * @return this.containsVariablesAsOften(that) returns true  iff
      * the list for each variable of this is at least as long as the list for each variable of that
      */
     public final boolean containsVariablesAsOften(Map<TRSVariable, List<Position>> that) {
@@ -581,7 +582,7 @@ public abstract class TRSTerm
             } else {
                 return false;
             }
-            
+
         }
         return true;
     }
@@ -616,7 +617,7 @@ public abstract class TRSTerm
 
     /**
      * checks whether this term has sub as proper subterm, i.e. whether there is some
-     * non-empty position p such that this|_p = sub.
+     * non-empty position subLeftPos such that this|_p = sub.
      */
     public final boolean hasProperSubterm(TRSTerm sub) {
         if (Globals.useAssertions) {
@@ -637,7 +638,7 @@ public abstract class TRSTerm
 
     /**
      * checks whether this term has sub as a subterm, i.e. whether there is some
-     * position p such that this|_p = sub. This method is equivalent to
+     * position subLeftPos such that this|_p = sub. This method is equivalent to
      *
      * This method is equivalent to this.getSubterms.contains(sub), but it
      * @param sub
@@ -943,7 +944,7 @@ public abstract class TRSTerm
 
     /**
      * Returns all multi-distributions which result out of all possible rewritings in R.
-     * 
+     *
      * @param term - The term we want to rewrite
      * @return Set of all possible resulting multi-distributions after a single rewrite step.
      */
@@ -963,7 +964,7 @@ public abstract class TRSTerm
      */
 
     public MultiDistribution<TRSTerm> rewriteWithProbOfTerm(ProbabilisticRule rule, Position p, Substitution matcher, BigFraction probability) {
-        //final TRSTerm subterm = this.getSubterm(p);
+        //final TRSTerm subterm = this.getSubterm(subLeftPos);
         //final TRSFunctionApplication lhs = rule.getLeft();
         final HashMultiSet<Pair<TRSTerm, BigFraction>> resProbabilityMap = new HashMultiSet<Pair<TRSTerm, BigFraction>>();
         for (Entry<Pair<TRSTerm, BigFraction>, Integer> entry : rule.getRight().getProbabilityMapping().entrySet()) {
@@ -980,7 +981,7 @@ public abstract class TRSTerm
 
     /**
      * Returns all multi-distributions which result out of all possible rewritings in R.
-     * 
+     *
      * @param term - The term we want to rewrite
      * @return Set of all possible resulting multi-distributions after a single rewrite step.
      */
@@ -1068,6 +1069,43 @@ public abstract class TRSTerm
                 }
             }
         }
+        return rewritings;
+    }
+
+    public Set<RewriteStep> computePossibleRewrites(Map<FunctionSymbol, ? extends Set<? extends GeneralizedRule>> rules, FreshNameGenerator freshNames) {
+        final Set<RewriteStep> rewritings = new LinkedHashSet<>();
+        for (Pair<Position, TRSTerm> actPair : this.getPositionsWithSubTerms()) {
+            final TRSTerm subterm = actPair.y;
+            if (!(subterm instanceof TRSFunctionApplication fSubterm))
+                continue;
+
+            Set<? extends GeneralizedRule> usefulRules = rules.get(fSubterm.getRootSymbol());
+            if (usefulRules == null)
+                continue;
+
+            for (GeneralizedRule actRule : usefulRules) {
+                final TRSFunctionApplication lhs = actRule.getLeft();
+                TRSSubstitution matcher = lhs.getMatcher(subterm);
+                if (matcher == null)
+                    continue;
+
+                if (!(actRule instanceof Rule)) {
+                    final Map<TRSVariable, TRSTerm> freshVars = new LinkedHashMap<>(matcher.toMap());
+                    for (TRSVariable var : actRule.getRight().getVariables()) {
+                        if (!freshVars.containsKey(var)) {
+                            freshVars.put(var, TRSTerm.createVariable(freshNames.getFreshName("x0", false)));
+                        }
+                    }
+
+                    matcher = TRSSubstitution.create(ImmutableCreator.create(freshVars), true);
+                }
+
+                TRSTerm substituted = replaceAt(actPair.x, actRule.getRight().applySubstitution(matcher));
+                RewriteStep rewriteStep = new RewriteStep(this, actPair.x, actRule, substituted);
+                rewritings.add(rewriteStep);
+            }
+        }
+
         return rewritings;
     }
 

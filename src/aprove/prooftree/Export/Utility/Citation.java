@@ -90,7 +90,8 @@ public enum Citation {
     OHL94B,
     TOY87,
     RV80,
-    BN98
+    BN98,
+    AOTO10
     ;
 
     @Override
