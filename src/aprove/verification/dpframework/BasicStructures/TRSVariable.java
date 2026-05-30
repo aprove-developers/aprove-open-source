@@ -305,9 +305,9 @@ public final class TRSVariable extends TRSTerm implements Variable {
     
     @Override 
     protected void collectTree(Position pos, BiTreeNode<Pair<Position, TRSTerm>> parent) {
-    	if (parent == null) {
+    	if (parent.getValue() == null) {
     		// root as leave
-    		parent = new BiTreeNode<>(new Pair<>(pos, this));
+            parent.setValue(new Pair<>(pos, this));
     	} else {
     		parent.addChild(new BiTreeNode<>(new Pair<>(pos, this)));
     	}
