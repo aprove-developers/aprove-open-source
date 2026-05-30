@@ -16,7 +16,7 @@ import immutables.*;
 public class CriticalPairs {
 
     public CriticalPairs(ConfTRSProblem conftrs) {
-        this(conftrs.getR(), conftrs.getRuleMap());
+        this(conftrs.getRules(), conftrs.getRuleMap());
     }
 
     private volatile AbortableIterator<CriticalPairInfo> critPairIterator;
