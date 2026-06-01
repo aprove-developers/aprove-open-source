@@ -14,38 +14,46 @@ import immutables.ImmutableList;
 
 import java.util.*;
 
-public class CriticalPairJoinTree<T extends GeneralizedRule> {
-    private final CriticalPairInfo criticalPairInfo;
+public class TrsTermJoinTree<T extends GeneralizedRule> {
     private final Map<FunctionSymbol, ? extends Set<? extends T>> rules;
-    private Set<BiTreeNode<RewriteStep>> sLastLayer = new LinkedHashSet<>();
-    private Set<BiTreeNode<RewriteStep>> tLastLayer = new LinkedHashSet<>();
+    private final CriticalPairInfo cpInfo;
+    private final TRSTerm s;
+    private final TRSTerm t;
     private final Map<TRSTerm, ImmutableList<RewriteStep>> normalFormCache;
     private final HashMap<TRSTerm, BiTreeNode<RewriteStep>> sLazySubstitutions = new HashMap<>();
     private final HashMap<TRSTerm, BiTreeNode<RewriteStep>> tLazySubstitutions = new HashMap<>();
     private final FreshNameGenerator freshNames = new FreshNameGenerator(FreshNameGenerator.VARIABLES);
+    private Set<BiTreeNode<RewriteStep>> sLastLayer = new LinkedHashSet<>();
+    private Set<BiTreeNode<RewriteStep>> tLastLayer = new LinkedHashSet<>();
     private ImmutableList<RewriteStep> foundNormalForm;
 
-    public CriticalPairJoinTree(Map<FunctionSymbol, ? extends Set<? extends T>> rules, CriticalPairInfo criticalPairInfo, Map<TRSTerm, ImmutableList<RewriteStep>> normalFormCache) {
-        this.rules = rules;
-        this.criticalPairInfo = criticalPairInfo;
-        BiTreeNode<RewriteStep> sTree = new BiTreeNode<>(new RewriteStep(criticalPairInfo.divergence(), Position.EPSILON, criticalPairInfo.sRule(), criticalPairInfo.s()));
-        BiTreeNode<RewriteStep> tTree = new BiTreeNode<>(new RewriteStep(criticalPairInfo.divergence(), Position.EPSILON, criticalPairInfo.tRule(), criticalPairInfo.t()));
-        this.sLastLayer.add(sTree);
-        this.tLastLayer.add(tTree);
-        this.normalFormCache = normalFormCache;
-        this.sLazySubstitutions.put(criticalPairInfo.s(), sTree);
-        this.tLazySubstitutions.put(criticalPairInfo.t(), tTree);
-        freshNames.lockNames(CollectionUtils.getNames(criticalPairInfo.s().getVariables()));
-        freshNames.lockNames(CollectionUtils.getNames(criticalPairInfo.t().getVariables()));
+    public TrsTermJoinTree(Map<FunctionSymbol, ? extends Set<? extends T>> rules, CriticalPairInfo cpInfo, Map<TRSTerm, ImmutableList<RewriteStep>> normalFormCache) {
+        this(rules, cpInfo.s(), cpInfo.t(), new BiTreeNode<>(new RewriteStep(cpInfo.divergence(), Position.EPSILON, cpInfo.sRule(), cpInfo.s())), new BiTreeNode<>(new RewriteStep(cpInfo.divergence(), Position.EPSILON, cpInfo.tRule(), cpInfo.t())), normalFormCache, cpInfo);
     }
 
-    JoinableResult isCriticalPairJoinable(int start, int limit, CriticalPairs.SearchMode searchMode, Abortion aborter) {
+    public TrsTermJoinTree(Map<FunctionSymbol, ? extends Set<? extends T>> rules, TRSTerm s, TRSTerm t) {
+        this(rules, s, t, new BiTreeNode<>(new RewriteStep(null, null, null, s)), new BiTreeNode<>(new RewriteStep(null, null, null, t)), null, null);
+    }
+
+    private TrsTermJoinTree(Map<FunctionSymbol, ? extends Set<? extends T>> rules, TRSTerm s, TRSTerm t, BiTreeNode<RewriteStep> sTree, BiTreeNode<RewriteStep> tTree, Map<TRSTerm, ImmutableList<RewriteStep>> normalFormCache, CriticalPairInfo cpInfo) {
+        this.rules = rules;
+        this.cpInfo = cpInfo;
+        this.s = s;
+        this.t = t;
+        this.normalFormCache = normalFormCache;
+        this.sLastLayer.add(sTree);
+        this.tLastLayer.add(tTree);
+        freshNames.lockNames(CollectionUtils.getNames(s.getVariables()));
+        freshNames.lockNames(CollectionUtils.getNames(t.getVariables()));
+    }
+
+    JoinableResult areTermsJoinable(int start, int limit, CriticalPairs.SearchMode searchMode, Abortion aborter) {
         if (start >= limit)
             return new JoinableResult.Maybe();
 
         if (normalFormCache != null) {
-            ImmutableList<RewriteStep> leftNF = normalFormCache.get(criticalPairInfo.s());
-            ImmutableList<RewriteStep> rightNF = normalFormCache.get(criticalPairInfo.t());
+            ImmutableList<RewriteStep> leftNF = normalFormCache.get(s);
+            ImmutableList<RewriteStep> rightNF = normalFormCache.get(t);
             if (leftNF != null && rightNF != null && leftNF.size() > 1 && rightNF.size() > 1 && !leftNF.getLast().substitutedTerm().equals(rightNF.getLast().substitutedTerm()))
                 return new JoinableResult.WcrCounterExample.NonConfluent(leftNF, rightNF);
             if (leftNF != null && leftNF.size() > 1)
@@ -56,19 +64,19 @@ public class CriticalPairJoinTree<T extends GeneralizedRule> {
 
         // TODO: actually implement start argument
         for (int i = 0; i < limit; i++) {
-            JoinableResult sResult = buildTreeLayer(criticalPairInfo.s(), sLastLayer, sLazySubstitutions, tLazySubstitutions, searchMode, aborter);
+            JoinableResult sResult = buildTreeLayer(s, sLastLayer, sLazySubstitutions, tLazySubstitutions, searchMode, aborter);
             if (!(sResult instanceof NewLayer(Set<BiTreeNode<RewriteStep>> sNewLayer)))
                 return sResult;
             sLastLayer = sNewLayer;
 
-            var tResult = buildTreeLayer(criticalPairInfo.t(), tLastLayer, tLazySubstitutions, sLazySubstitutions, searchMode, aborter);
+            var tResult = buildTreeLayer(t, tLastLayer, tLazySubstitutions, sLazySubstitutions, searchMode, aborter);
             if (!(tResult instanceof NewLayer(Set<BiTreeNode<RewriteStep>> tNewLayer)))
                 return tResult;
             tLastLayer = tNewLayer;
 
             // TODO: Implement searchMode. At this point, we would need to check if we found a join term and return a JoinableResult.Joinable
             if (sNewLayer.isEmpty() && tNewLayer.isEmpty())
-                return new JoinableResult.WcrCounterExample.NonJoinable(criticalPairInfo);
+                return new JoinableResult.WcrCounterExample.NonJoinable(cpInfo);
         }
 
         return new JoinableResult.Maybe();
@@ -92,7 +100,8 @@ public class CriticalPairJoinTree<T extends GeneralizedRule> {
             // No further rewrites possible, we found a normal formal
             if (possibleRewrites.isEmpty()){
                 ImmutableList<RewriteStep> sequence = buildRewriteSequence(lastLayerNode);
-                normalFormCache.putIfAbsent(root, sequence);
+                if (normalFormCache != null)
+                    normalFormCache.putIfAbsent(root, sequence);
 
                 // Check if we previously found a normal form.
                 // If so, the TRS cannot be confluent
@@ -131,6 +140,5 @@ public class CriticalPairJoinTree<T extends GeneralizedRule> {
 
         Collections.reverse(sequence);
         return ImmutableCreator.create(sequence);
-        //return new RewriteSequence(sequence.getFirst().substitutedTerm(), sequence.getLast().substitutedTerm(), ImmutableCreator.create(sequence));
     }
 }

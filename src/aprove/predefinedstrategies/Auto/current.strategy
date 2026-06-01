@@ -2123,46 +2123,59 @@ critical_pair_analysis = LocalConfluenceProcessor
 newmanlemma_solve = Solve(
 				ConfNewmanProcessor : Any(
 						qtrs,
-            critical_pair_analysis
+                        critical_pair_analysis
 					)
 				)
 				
 conf_atomic_trs = First(
-				LimitedNotWCRProcessor,
-				newmanlemma_solve,
-      			NonConfluenceProcessor
+                conf_trs_decreasing_diagram,
+				newmanlemma_solve
 			)
 
 conf_trs_comp = First(
       ConfOrthogonalProcessor,
       StrongConfluenceProcessor,
       conf_atomic_trs
-		)
+    )
 
 conf_trs_mop = First(
 			ConfOrthogonalProcessor,
 			StrongConfluenceProcessor,
-      ModularComposableTRSProcessor : conf_trs_comp,
+            ModularComposableTRSProcessor : conf_trs_comp,
 			conf_atomic_trs
-			)
+		)
 
 conf_trs_toyama = First(
 			ConfOrthogonalProcessor,
 			StrongConfluenceProcessor,
 			ModularConstructorSharingProcessor : conf_trs_mop,
-      ModularComposableTRSProcessor : conf_trs_comp,
+            ModularComposableTRSProcessor : conf_trs_comp,
 			conf_atomic_trs
-			)
+		)
 
 conf_trs_decreasing_diagram = DecreasingDiagramsRuleLabellingProcessor[Order = POLO[Degree = 1, Engine = SMTLIB]]
-#conf_trs_decreasing_diagram = DecreasingDiagramsRuleLabellingProcessor[Order = POLO[Degree = 1, Engine = MINISAT]]
 
-conf_trs = First(
-            conf_trs_decreasing_diagram
-			#ConfOrthogonalProcessor,
-			#StrongConfluenceProcessor,
-			#DisjointUnionProcessor : conf_trs_toyama,
-			#ModularConstructorSharingProcessor : conf_trs_mop,
-            #ModularComposableTRSProcessor : conf_trs_comp,
-            #conf_atomic_trs
-		)
+conf_trs_preprocess = RedundantRulesProcessor
+
+conf_trs_prove = conf_trs_preprocess : First(
+            ConfOrthogonalProcessor,
+            StrongConfluenceProcessor,
+            DisjointUnionProcessor : conf_trs_toyama,
+            ModularConstructorSharingProcessor,
+            ModularComposableTRSProcessor : conf_trs_comp,
+            conf_atomic_trs
+        )
+
+conf_trs_disprove = First(
+            LimitedNotWCRProcessor,
+            NonConfluenceProcessor,
+            critical_pair_analysis
+        )
+
+conf_trs = Any(
+            conf_trs_prove,
+            First(
+                ModularComposableTRSProcessor : conf_trs_disprove,
+                conf_trs_disprove
+            )
+        )

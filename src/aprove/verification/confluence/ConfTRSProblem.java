@@ -547,24 +547,9 @@ public class ConfTRSProblem extends DefaultBasicObligation
     }
 
     private void calculateDefSymbolsAndRuleMap() {
-        final Map<FunctionSymbol, Set<Rule>> ruleMap = new LinkedHashMap<FunctionSymbol, Set<Rule>>();
-        for (final Rule rule : this.rules) {
-            final FunctionSymbol f = rule.getRootSymbol();
-            Set<Rule> fRules = ruleMap.get(f);
-            if (fRules == null) {
-                fRules = new LinkedHashSet<Rule>();
-                ruleMap.put(f, fRules);
-            }
-            fRules.add(rule);
-        }
-        // make immutable
-        final Map<FunctionSymbol, ImmutableSet<Rule>> immutableMap =
-                                                                   new LinkedHashMap<FunctionSymbol, ImmutableSet<Rule>>();
-        for (final Map.Entry<FunctionSymbol, Set<Rule>> entry : ruleMap.entrySet()) {
-            immutableMap.put(entry.getKey(), ImmutableCreator.create(entry.getValue()));
-        }
-        this.ruleMap = ImmutableCreator.create(immutableMap);
-        this.defSymbolsOfR = ImmutableCreator.create(immutableMap.keySet());
+        var incrementalRuleMap = new IncrementalRuleMap(rules);
+        this.ruleMap = incrementalRuleMap.toImmutable();
+        this.defSymbolsOfR = ImmutableCreator.create(incrementalRuleMap.getDefinedSymbols());
     }
 
     /**

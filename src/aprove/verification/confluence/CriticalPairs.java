@@ -130,7 +130,7 @@ public class CriticalPairs {
      * @param aborter
      * @return are the pairs Joinable in one Step
      */
-    private synchronized void ensureStrongJoinabilityIsDetermined(final Abortion aborter) throws AbortionException {
+    public synchronized void ensureStrongJoinabilityIsDetermined(final Abortion aborter) throws AbortionException {
         if (this.allStronglyJoinable != YNM.MAYBE) {
             // Already determined, do nothing.
             return;
@@ -493,8 +493,8 @@ public class CriticalPairs {
             SearchMode searchMode,
             final Abortion aborter) throws AbortionException {
 
-        CriticalPairJoinTree<T> joinTree = new CriticalPairJoinTree<>(rules, criticalPairInfo, normalFormCache);
-        return joinTree.isCriticalPairJoinable(start, limit, searchMode, aborter);
+        TrsTermJoinTree<T> joinTree = new TrsTermJoinTree<>(rules, criticalPairInfo, normalFormCache);
+        return joinTree.areTermsJoinable(start, limit, searchMode, aborter);
     }
 
     // This private inner class is copied from GeneralizedRule.java and modified
