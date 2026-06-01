@@ -4,7 +4,7 @@ set -euo pipefail
 
 tmpdir="$(mktemp -d)"; trap 'rm -rf "$tmpdir"' EXIT
 tmp="$tmpdir/input.ari"
-mkinput "$tmp" "(goal CONFLUENCE)" < "$BENCHMARK"
+mkinput "$tmp" "(GOAL CONFLUENCE)" < "$BENCHMARK"
 
 [ "${PRINT_INPUT:-0}" = 1 ] && { printf '%s\n' "---BEGIN INPUT (TRS_Confluence)---" >&2; cat "$tmp" >&2; printf '%s\n' "---END INPUT---" >&2; }
 
