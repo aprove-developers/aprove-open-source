@@ -1,2 +1,5 @@
 result
 results
+example_results
+__pycache__/
+*.pyc

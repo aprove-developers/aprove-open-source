@@ -1,7 +1,7 @@
 FOLDER="../examples"
 SUBDIR="TRS_Outermost"
 CATEGORY="TRS_Outermost"
-TIMEOUT="10"
+TIMEOUT="30"
 #IMAGE=<DOCKER_IMAGE>
 OUTDIR="example_results/TRS_Outermost"
 APROVE_JAR="../dist/lib/aprove.jar"

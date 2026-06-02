@@ -1,87 +1,108 @@
 # 🔎 AProVE — Automated Program Verification Environment
 
 <p align="center">
-  <img src="Images/aprove_logo_new.png" alt="AProVE Logo" width="420" />
+  <img src="Images/aprove_logo_new.png" alt="AProVE logo" width="420" />
 </p>
 
+<p align="center"><strong>Automated reasoning about program termination and complexity</strong></p>
+
 <p align="center">
-  Automated reasoning about program termination and complexity.<br>
-  <i>Version: 0.1.0-alpha</i>
+  <a href="https://github.com/aprove-developers/aprove-open-source/releases">Releases</a>
+  ·
+  <a href="https://github.com/aprove-developers/aprove-open-source/wiki">Developer Guide</a>
+  ·
+  <a href="https://github.com/aprove-developers/aprove-open-source/issues">Issues</a>
+  ·
+  <a href="http://www.youtube.com/watch?v=-OrJi9DeKOg">Intro Video</a>
 </p>
+
+<p align="center"><em>Current release: 1.0.0 Capybara</em></p>
 
 ---
 
+## 📖 Overview
 
-## 📖 What is AProVE?
+AProVE is an automated verification framework for proving properties such as termination and worst-case complexity. It is developed by the <a href="https://verify.rwth-aachen.de/index.html#research">Programming Languages and Verification</a> group at RWTH Aachen University.
 
-**AProVE** is an automated tool for analyzing **termination** and **complexity** of programs. It is mainly developed at the <a href="https://verify.rwth-aachen.de/index.html#research">*Programming Languages and Verification*</a> group at RWTH Aachen University.
+At a high level, AProVE helps answer questions like:
 
-At its core, AProVE answers questions like:
+- Does this program terminate on all inputs?
+- How time consuming can its execution become in the worst case?
+- Can these properties be derived automatically from a formal model of the program?
 
-- *Does a given program always terminate on every possible input?*
-- *What are lower/upper bounds on the worst-case time complexity of a given program?*
+AProVE supports several programming paradigms and input languages, including rewriting-based, imperative, functional, and logic-oriented formalisms. Instead of relying on testing alone, it builds machine-checkable proof obligations and solves them with formal methods.
 
-To guarantee correctness of software, especially for safety-critical and distributed systems, testing alone is insufficient, making formal verification based on mathematical proofs necessary. AProVE is able to automatically verify software without needing to rely on tests or on difficult mathematical proofs written by a human expert.
-It supports multiple programming languages like Java, C, Haskell, or Prolog by transforming them into formal representations and applying advanced verification techniques. 
+## 📖 Why AProVE
 
-## 🎥 Introduction
+| Capability | Description |
+| --- | --- |
+| Termination analysis | Proves whether a program always terminates |
+| Complexity analysis | Derives lower and upper bounds on runtime |
+| Multiple formalisms | Supports languages such as Java, C, Haskell, and Prolog |
+| Extensible architecture | New processors, strategies, and backends can be integrated |
+
+## 🧠 How It Works
+
+AProVE follows a <b>transform-and-analyze</b> approach:
+
+1. Translate the input program into an internal problem representation.
+2. Apply processors that simplify, decompose, or solve the problem.
+3. Use strategies to orchestrate the analysis flow.
+4. Delegate specialized proof obligations to backend solvers.
+5. Combine all intermediate results into a final result.
+
+Typical outcomes include `YES`, `NO`, and `MAYBE` for termination, as well as complexity bounds such as `O(1)`, `O(n)`, or `EXP`.
+
+## 🏗️ Architecture
+
+The core system is organized around four concepts.
+
+### Problems
+
+A problem captures the current analysis state. For example, a term rewrite system may be represented as a `TRSProblem`.
+
+### Processors
+
+Processors are the main transformation units in AProVE. They either simplify a problem, split it into subproblems, or solve it directly.
+
+### Strategies
+
+Strategies control which processors are applied, in which order, and under which conditions.
+
+### Solvers
+
+Solvers handle specific mathematical subproblems. AProVE integrates backend technologies such as SAT and SMT solvers, as well as domain-specific tools like KoAT for complexity analysis.
+
+## 🎥 Project Resources
+
+### Video Introduction
 
 <p align="center">
   <a href="http://www.youtube.com/watch?v=-OrJi9DeKOg">
-    <img src="Images/AProVE_Youtube.png" alt="AProVE Intro Video" width="420" />
+    <img src="Images/AProVE_Youtube.png" alt="AProVE introduction video" width="420" />
   </a>
 </p>
 
-## 🧠 Core Idea
+### Development Setup
 
-AProVE follows a **transform-and-analyze** approach:
+For local development and build instructions, see the project wiki:
 
-1. Convert a program into a formal **problem representation**
-2. Apply **processors** to transform the problem into simpler ones
-3. Use **solvers** to derive results
-4. Combine results into a final answer like ✅ `YES` — program terminates; ❌ `NO` — program does not terminate; or ❓ `MAYBE` — inconclusive.<br> Or it provides bounds on the worst-case time complexity like `O(1)` — constant time complexity; `O(n^1)` — linear time complexity; or `EXP` — exponential time complexity.
+<a href="https://github.com/aprove-developers/aprove-open-source/wiki">https://github.com/aprove-developers/aprove-open-source/wiki</a>
 
-## 🏗️ Architecture Overview
+### Contributing
 
-The core parts of AProVe consists of <b>problems</b>, <b>processors</b>, <b>strategies</b>, and <b>solvers</b>.
+Contributions are welcome. AProVE is particularly well suited for extending:
 
-### 🔹 Problems
+- supported input languages and problem representations
+- analysis processors and strategies
+- solver integrations and backend tooling
 
-A **Problem** represents the current state of analysis. E.g., Term rewrite systems → `TRSProblem`
+If you plan to contribute code, start with the wiki and the existing architecture sections above so you can place new work into the right abstraction layer.
 
+## 🤝 Community And Project Links
 
-### 🔹 Processors
-
-Processors are the **core engine** of AProVE.
-They transform problems into simpler ones or directly produce results.
-
-
-### 🔹 Strategies
-
-A **strategy** determines: which processors to apply, in what order, and under which conditions.
-
-
-### 🔹 Solvers
-
-By **Solvers** we mean every tool that is able to mathematically proof certain problems, e.g., we use SAT solvers to prove satisfiyability of SAT formulas, SMT solvers to prove satisfiyability of SMT formulas over different theories, or specialized domain solvers like KoAT to compute upper bounds on the complexity of an integer transition system.
-
-
-## 🤝 Contributing
-
-We welcome contributions!
-
-### 🛠️ Getting Started
-
-To set up AProVE for development, follow the official guide:
-
-https://github.com/aprove-developers/aprove-open-source/wiki
-
-### 🧩 Extensibility
-
-AProVE is designed to be extensible:
-
-<ul style="list-style-type: none;">
-  <li>➕ Add new languages and implement new problem types</li>
-  <li>➕ Create new processors to enhance existing analysis or to analyze new problem types</li>
-  <li>➕ Integrate additional solvers as backend tools like modern SAT or SMT solvers</li>
-</ul>
+- Releases: <a href="https://github.com/aprove-developers/aprove-open-source/releases">GitHub Releases</a>
+- Issues: <a href="https://github.com/aprove-developers/aprove-open-source/issues">Bug reports and feature requests</a>
+- Discussions: <a href="https://github.com/aprove-developers/aprove-open-source/discussions">Community discussions</a>
+- Code of Conduct: <a href="https://github.com/aprove-developers/aprove-open-source/blob/main/CODE_OF_CONDUCT.md">CODE_OF_CONDUCT.md</a>
+- Contributing Guide: <a href="https://github.com/aprove-developers/aprove-open-source/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>

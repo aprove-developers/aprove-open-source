@@ -2,7 +2,7 @@ FOLDER="../examples"
 SUBDIR="TRS_Relative"
 CATEGORY="TRS_Relative"
 # No handlers/TRS_Relative.sh; solver will fall back to __default__.sh
-TIMEOUT="10"
+TIMEOUT="30"
 #IMAGE=<DOCKER_IMAGE>
 OUTDIR="example_results/TRS_Relative"
 APROVE_JAR="../dist/lib/aprove.jar"

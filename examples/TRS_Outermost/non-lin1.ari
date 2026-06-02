@@ -1,0 +1,6 @@
+; @origtpdbfilename ./TRS/outermost/endrullis08/non-lin1.trs
+; @xtcfilename "./TRS_Outermost/Mixed_outermost/non-lin1.xml"
+(format TRS)
+(fun g 2)
+(rule (g x x) (g (g x x) x))
+(rule (g x y) y)

@@ -4,14 +4,17 @@ import csv
 import math
 import os
 import random
+import signal
 import subprocess
 import sys
 import tempfile
+import datetime
+import json
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 from pathlib import Path
-import serialize_result
+import lib.serialize_result as serialize_result
 
 try:
     import tomllib  # Python 3.11+
@@ -67,6 +70,10 @@ def parse_args() -> argparse.Namespace:
                         help="Randomly sample N files from the (filtered) problem set.")
     parser.add_argument("--sample-pct", type=int, metavar="PCT",
                         help="Randomly sample PCT%% of the (filtered) problem set (1-100). Ignored if --sample is set.")
+    parser.add_argument("--runall", type=Path, metavar="DIR",
+                        help="Run every *.toml config found in DIR, forwarding all other flags to each run.")
+    parser.add_argument("--cert", action="store_true", default=argparse.SUPPRESS,
+                        help="Pass --cert to the solver, requesting CPF certificate output.")
     return parser.parse_args()
 
 
@@ -107,6 +114,7 @@ def build_config(cli: argparse.Namespace) -> dict[str, str | Path]:
         ("SAMPLE_PCT", "sample_pct"),
         ("LOCAL", "local"),
         ("LOCAL_JAVA", "local_java"),
+        ("CERT", "cert"),
     ]:
         if hasattr(cli, attr):
             val = getattr(cli, attr)
@@ -147,6 +155,13 @@ def get_commit_id(image: str, jar_path: Path | None) -> str:
         return result.stdout.split()[0]
     except Exception:  # noqa: BLE001
         return "unknown"
+
+
+def _kill_pgroup(pgid: int) -> None:
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except OSError:
+        pass
 
 
 def _docker_kill(cid_file: Path) -> None:
@@ -193,6 +208,7 @@ def run_file(cfg: dict[str, str | Path], file_path: Path, root: Path, outdir: Pa
         cfg["IMAGE"],
         f"--timeout={cfg['TIMEOUT']}",
         f"--category={cfg['CATEGORY']}",
+        *( ["--cert"] if cfg.get("CERT") else []),
         clean_file,
     ]
     try:
@@ -229,7 +245,7 @@ def run_file(cfg: dict[str, str | Path], file_path: Path, root: Path, outdir: Pa
             _maybe_append_flat(cfg, file_path, root, "KILLED")
             return file_path, "KILLED", ""
         if stderr and outdir:
-            (outdir / "error.log").open("a", encoding="utf-8").write(f"=== {clean_file} ===\n{stderr}\n\n")
+            (outdir / "error.log").open("a", encoding="utf-8").write(f"=== {datetime.datetime.now().isoformat(timespec='seconds')} {clean_file} ===\n{stderr}\n\n")
     except Exception as exc:  # noqa: BLE001
         return file_path, "", f"error invoking docker: {exc}"
 
@@ -255,12 +271,14 @@ def run_file_local(cfg: dict[str, str | Path], file_path: Path, root: Path, outd
         sys.executable, str(solver),
         f"--timeout={cfg['TIMEOUT']}",
         f"--category={cfg['CATEGORY']}",
+        *( ["--cert"] if cfg.get("CERT") else []),
         clean_file,
     ]
     try:
         deadline = time.monotonic() + int(cfg["TIMEOUT"]) + KILL_GRACE
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                                 env=env, preexec_fn=os.setsid if hasattr(os, "setsid") else None)
+        pgid = os.getpgid(proc.pid) if hasattr(os, "getpgid") else None
         killed_by_script = False
         try:
             while True:
@@ -269,6 +287,8 @@ def run_file_local(cfg: dict[str, str | Path], file_path: Path, root: Path, outd
                     break
                 except subprocess.TimeoutExpired:
                     if STOP_EVENT.is_set():
+                        if pgid is not None:
+                            _kill_pgroup(pgid)
                         proc.kill()
                         try:
                             stdout, stderr = proc.communicate(timeout=2)
@@ -277,12 +297,15 @@ def run_file_local(cfg: dict[str, str | Path], file_path: Path, root: Path, outd
                             stdout, stderr = proc.communicate()
                         return file_path, stdout or "", "cancelled"
                     if time.monotonic() >= deadline:
+                        if pgid is not None:
+                            _kill_pgroup(pgid)
                         proc.kill()
                         stdout, stderr = proc.communicate()
                         killed_by_script = True
                         break
         finally:
-            pass
+            if pgid is not None:
+                _kill_pgroup(pgid)
         output = stdout or ""
         if killed_by_script:
             if outdir:
@@ -290,7 +313,7 @@ def run_file_local(cfg: dict[str, str | Path], file_path: Path, root: Path, outd
             _maybe_append_flat(cfg, file_path, root, "KILLED")
             return file_path, "KILLED", ""
         if stderr and outdir:
-            (outdir / "error.log").open("a", encoding="utf-8").write(f"=== {clean_file} ===\n{stderr}\n\n")
+            (outdir / "error.log").open("a", encoding="utf-8").write(f"=== {datetime.datetime.now().isoformat(timespec='seconds')} {clean_file} ===\n{stderr}\n\n")
     except Exception as exc:  # noqa: BLE001
         return file_path, "", f"error invoking solver: {exc}"
 
@@ -356,8 +379,76 @@ def filter_files(files: list[Path], root: Path, outdir: Path | None, resume: boo
     return files
 
 
+_DEFAULT_RESULT_LABELS = ["YES", "NO", "MAYBE", "KILLED", "ERROR"]
+
+
+def _query_result_labels(cfg: dict, category: str, local: bool, extra_docker_flags: list[str]) -> list[str]:
+    try:
+        if local:
+            solver = Path(__file__).resolve().parent / "solver"
+            result = subprocess.run(
+                [sys.executable, str(solver), "--category", category, "--meta"],
+                capture_output=True, text=True,
+            )
+        else:
+            result = subprocess.run(
+                ["docker", "run", "--rm", *extra_docker_flags, cfg["IMAGE"],
+                 "--category", category, "--meta"],
+                capture_output=True, text=True,
+            )
+        if result.returncode == 0:
+            return json.loads(result.stdout).get("result_labels", _DEFAULT_RESULT_LABELS)
+    except Exception:  # noqa: BLE001
+        pass
+    return _DEFAULT_RESULT_LABELS
+
+
+def run_all_configs(runall_dir: Path) -> int:
+    configs = sorted(p for p in runall_dir.glob("*.toml") if not p.name.startswith("_"))
+    if not configs:
+        print(f"ERROR: no *.toml files found in {runall_dir}", file=sys.stderr)
+        return 2
+
+    # Forward all argv except --runall (and its value) and -c/--config (and its value)
+    passthrough: list[str] = []
+    argv = sys.argv[1:]
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg in ("--runall", "-c", "--config"):
+            i += 2
+        elif arg.startswith(("--runall=", "--config=")):
+            i += 1
+        else:
+            passthrough.append(arg)
+            i += 1
+
+    failures = 0
+    for cfg_path in configs:
+        print(f"\n{'='*60}\nConfig: {cfg_path.name}\n{'='*60}", flush=True)
+        try:
+            ret = subprocess.run(
+                [sys.executable, __file__, "-c", str(cfg_path), *passthrough]
+            ).returncode
+        except KeyboardInterrupt:
+            return 130
+        if ret == 130:
+            return 130
+        if ret != 0:
+            failures += 1
+
+    total = len(configs)
+    print(f"\nFinished {total} config(s): {total - failures} OK, {failures} failed.")
+    return 1 if failures else 0
+
+
 def main() -> int:
     cli = parse_args()
+
+    runall_dir = getattr(cli, "runall", None)
+    if runall_dir:
+        return run_all_configs(Path(runall_dir))
+
     if not hasattr(cli, "config"):
         print("ERROR: no config file provided. Use -c/--config to supply a TOML configuration.", file=sys.stderr)
         return 2
@@ -418,6 +509,8 @@ def main() -> int:
         jar_path_for_version = cfg.get("APROVE_JAR")
         cfg["COMMIT_ID"] = get_commit_id(image, Path(str(jar_path_for_version)) if jar_path_for_version else None)
         print(f"Mode: docker (image={image})")
+
+    result_labels = _query_result_labels(cfg, category, local, mem_flags + jar_mount if not local else [])
 
     print(f"Testing all *.{extension} in {folder}/{subdir}")
     print(f"Under the {category} category using {cfg.get('APROVE_JAR', 'jar from image')}")
@@ -490,7 +583,7 @@ def main() -> int:
         monitor.join()
 
     raw_result = bool(cfg.get("RAW_RESULT", False))
-    counts: dict[str, int] = {} if raw_result else {"YES": 0, "NO": 0, "MAYBE": 0, "KILLED": 0, "ERROR": 0}
+    counts: dict[str, int] = {} if raw_result else {"YES": 0, "NO": 0, "MAYBE": 0, "AST": 0, "SAST": 0, "KILLED": 0, "ERROR": 0}
     if outdir:
         summary_path = outdir / "summary.csv"
         if summary_path.exists():
@@ -503,8 +596,8 @@ def main() -> int:
         labels = sorted(counts, key=lambda k: (-counts[k], k))
         col_w = max((len(l) for l in labels), default=6)
     else:
-        labels = ["YES", "NO", "MAYBE", "KILLED", "ERROR"]
-        col_w = 10
+        labels = result_labels
+        col_w = max(len(l) for l in labels)
     print(f"\n{'Result':<{col_w}} {'Count':>6}")
     print(f"{'-'*col_w} {'-'*6}")
     for label in labels:

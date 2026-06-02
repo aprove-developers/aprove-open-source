@@ -1,0 +1,9 @@
+; @origtpdbfilename ./SRS/Waldmann07b/size-12-alpha-3-num-128.srs
+; @xtcfilename "./SRS_Standard/Waldmann_07_size12/size-12-alpha-3-num-128.xml"
+(format TRS)
+(fun a 1)
+(fun b 1)
+(fun c 1)
+(rule (a x1) x1)
+(rule (a (a (b (b x1)))) (b (c (a (c x1)))))
+(rule (c x1) (b (a x1)))

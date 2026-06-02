@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import importlib
+import json
 import os
 import sys
 from pathlib import Path
@@ -10,6 +12,7 @@ http://aprove.informatik.rwth-aachen.de
 
 Usage:
   solver [--timeout N] [--timeout=N] --category NAME [--cert] BENCHMARK
+  solver --category NAME --meta
 
 Options:
   --help            Print this help and exit
@@ -19,11 +22,51 @@ Options:
   --timeout <N>     Timeout in seconds   (also accepts --timeout=N)
   --category <C>    Category (exact TPDB directory name)
   --cert            Emit CPF2 + convert to CPF3 (CETA-compatible)
+  --meta            Print handler metadata as JSON and exit
 """
+
+_DEFAULT_LABELS = ["YES", "NO", "MAYBE", "KILLED", "ERROR"]
+
+
+def _load_handler(category: str, handlers_dir: Path):
+    bench_root = str(handlers_dir.parent)
+    if bench_root not in sys.path:
+        sys.path.insert(0, bench_root)
+
+    handler_py = handlers_dir / f"{category}.py"
+    default_py = handlers_dir / "__default__.py"
+
+    if not category or not handler_py.exists():
+        if default_py.exists():
+            module_name = "__default__"
+        else:
+            return None, None
+    else:
+        module_name = category
+
+    try:
+        mod = importlib.import_module(f"handlers.{module_name}")
+        return mod, module_name
+    except ImportError as e:
+        print(f"Error: failed to import handler '{module_name}': {e}", file=sys.stderr)
+        return None, None
+
+
+def _find_handlers_dir() -> Path | None:
+    script_dir = Path(__file__).resolve().parent
+    candidates = []
+    solver_root = os.environ.get("SOLVER_ROOT")
+    if solver_root:
+        candidates.append(Path(solver_root) / "handlers")
+    candidates.extend([
+        script_dir.parent / "handlers",
+        Path("/opt/solver/handlers"),
+        script_dir / "handlers",
+    ])
+    return next((p for p in candidates if p.is_dir()), None)
 
 
 def main(argv: list[str]) -> int:
-    # Simple subcommands (match first argument only like the bash version)
     if argv:
         first = argv[0]
         if first == "--name":
@@ -44,6 +87,7 @@ def main(argv: list[str]) -> int:
     category = ""
     benchmark = ""
     cert = False
+    meta = False
 
     args = list(argv)
     while args:
@@ -65,6 +109,8 @@ def main(argv: list[str]) -> int:
                 category = args.pop(0)
             case "--cert":
                 cert = True
+            case "--meta":
+                meta = True
             case opt if opt.startswith("--"):
                 print(f"Error: unknown option: {opt}", file=sys.stderr)
                 return 2
@@ -74,50 +120,40 @@ def main(argv: list[str]) -> int:
                     return 2
                 benchmark = bench
 
+    handlers_dir = _find_handlers_dir()
+    if handlers_dir is None:
+        print("Error: handlers dir not found.", file=sys.stderr)
+        return 3
+
+    if meta:
+        if not category:
+            print("Error: --meta requires --category", file=sys.stderr)
+            return 2
+        mod, _ = _load_handler(category, handlers_dir)
+        labels = getattr(mod, "RESULT_LABELS", _DEFAULT_LABELS) if mod else _DEFAULT_LABELS
+        print(json.dumps({"result_labels": labels}))
+        return 0
+
     if not benchmark:
         print("Usage: solver --timeout N --category NAME [--cert] BENCHMARK", file=sys.stderr)
         return 2
 
-    # Locate handlers directory
-    script_dir = Path(__file__).resolve().parent
-    candidates = []
-    solver_root = os.environ.get("SOLVER_ROOT")
-    if solver_root:
-        candidates.append(Path(solver_root) / "handlers")
-    candidates.extend(
-        [
-            script_dir.parent / "handlers",
-            Path("/opt/solver/handlers"),
-            script_dir / "handlers",
-        ]
-    )
-
-    handlers_dir = next((p for p in candidates if p.is_dir()), None)
-    if handlers_dir is None:
-        checked = " ".join(str(p) for p in candidates)
-        print(f"Error: handlers dir not found. Checked: {checked}", file=sys.stderr)
-        return 3
-
-    handler = handlers_dir / f"{category}.sh"
-    default = handlers_dir / "__default__.sh"
-
-    if not category or not (handler.exists() and os.access(handler, os.X_OK)):
-        if default.exists() and os.access(default, os.X_OK):
-            handler = default
-        else:
-            print(f"Error: no handler for category '{category}' in '{handlers_dir}'", file=sys.stderr)
-            return 4
-
     if os.environ.get("DEBUG_SOLVER") == "1":
-        print(f"DEBUG: HANDLERS={handlers_dir} handler={handler}", file=sys.stderr)
+        print(f"DEBUG: HANDLERS={handlers_dir} category={category}", file=sys.stderr)
 
-    os.environ["TIMEOUT"] = timeout
-    os.environ["BENCHMARK"] = benchmark
-    os.environ["CERT"] = "true" if cert else "false"
+    mod, module_name = _load_handler(category, handlers_dir)
+    if mod is None:
+        print(f"Error: no handler for category '{category}' in '{handlers_dir}'", file=sys.stderr)
+        return 4
 
-    # Exec the handler script
-    handler_path = handler.as_posix()
-    os.execv(handler_path, [handler_path])
+    try:
+        output = mod.run(int(timeout), Path(benchmark), cert)
+    except Exception as e:  # noqa: BLE001
+        print(f"Error: handler '{module_name}' raised: {e}", file=sys.stderr)
+        return 1
+
+    sys.stdout.write(output)
+    return 0
 
 
 if __name__ == "__main__":

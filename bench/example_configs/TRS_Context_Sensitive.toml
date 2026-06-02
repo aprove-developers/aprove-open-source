@@ -2,7 +2,7 @@ FOLDER="../examples"
 SUBDIR="TRS_Contextsensitive"
 CATEGORY="TRS_Context_Sensitive"
 # No handlers/TRS_Context_Sensitive.sh; solver will fall back to __default__.sh
-TIMEOUT="10"
+TIMEOUT="30"
 #IMAGE=<DOCKER_IMAGE>
 OUTDIR="example_results/TRS_Context_Sensitive"
 APROVE_JAR="../dist/lib/aprove.jar"

@@ -1,0 +1,8 @@
+; @origtpdbfilename ./SRS/relative/zr13.srs
+; @xtcfilename "./SRS_Relative/Mixed_relative_SRS/zr13.xml"
+(format TRS)
+(fun a 1)
+(fun b 1)
+(fun c 1)
+(rule (a (b (c x1))) (c x1))
+(rule (c x1) (c (b (a x1))) :cost 0)

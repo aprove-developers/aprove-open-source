@@ -1,0 +1,16 @@
+; @origtpdbfilename ./TRS/TRCSR/inn/Ex18_Luc06_iGM.trs
+; @xtcfilename "./TRS_Innermost/Transformed_CSR_innermost_04/Ex18_Luc06_iGM.xml"
+(format TRS)
+(fun active 1)
+(fun f 1)
+(fun a 0)
+(fun mark 1)
+(fun g 1)
+(rule (active (f (f a))) (mark (f (g (f a)))))
+(rule (mark (f X)) (active (f (mark X))))
+(rule (mark a) (active a))
+(rule (mark (g X)) (active (g X)))
+(rule (f (mark X)) (f X))
+(rule (f (active X)) (f X))
+(rule (g (mark X)) (g X))
+(rule (g (active X)) (g X))

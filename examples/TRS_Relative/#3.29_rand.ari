@@ -1,8 +1,0 @@
-; @xtcfilename "./TRS_Relative/INVY_15/#3.29_rand.xml"
-(format TRS)
-(fun s 1)
-(fun f 3)
-(fun rand 1)
-(rule (f (s x) y y) (f y x (s x)))
-(rule (rand x) x :cost 0)
-(rule (rand x) (rand (s x)) :cost 0)

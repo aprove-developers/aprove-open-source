@@ -1,0 +1,18 @@
+; @origtpdbfilename ./TRS/CSR_Maude/lazy-nat-list/OvConsOS_nosorts.trs
+; @xtcfilename "./TRS_Contextsensitive/Maude_06/OvConsOS_nosorts.xml"
+(format CSTRS)
+(fun zeros 0 :replacement-map ())
+(fun cons 2 :replacement-map (1))
+(fun |0| 0 :replacement-map ())
+(fun and 2 :replacement-map (1))
+(fun tt 0 :replacement-map ())
+(fun length 1 :replacement-map (1))
+(fun nil 0 :replacement-map ())
+(fun s 1 :replacement-map (1))
+(fun take 2 :replacement-map (1 2))
+(rule zeros (cons |0| zeros))
+(rule (and tt X) X)
+(rule (length nil) |0|)
+(rule (length (cons N L)) (s (length L)))
+(rule (take |0| IL) nil)
+(rule (take (s M) (cons N IL)) (cons N (take M IL)))

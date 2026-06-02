@@ -1,9 +1,0 @@
-; @origtpdbfilename ./TRS/nontermin/AG01/#4.16.trs
-; @xtcfilename "./TRS_Standard/Strategy_removed_AG01/#4.16.xml"
-(format TRS)
-(fun f 2)
-(fun s 1)
-(fun |0| 0)
-(fun g 1)
-(rule (f (s |0|) (g x)) (f x (g x)))
-(rule (g (s x)) (g x))

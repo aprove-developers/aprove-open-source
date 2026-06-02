@@ -1,9 +1,0 @@
-; @xtcfilename "./SRS_Relative/Waldmann_23/size-8-alpha-3-num-7.xml"
-(format TRS)
-(fun c 1)
-(fun b 1)
-(fun a 1)
-(rule (c (b x)) (c x))
-(rule x (a x) :cost 0)
-(rule x (a (b x)) :cost 0)
-(rule (b (a x)) x :cost 0)

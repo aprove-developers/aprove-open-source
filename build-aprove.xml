@@ -6,6 +6,7 @@
 
 	<property name="depend_cache" value=".depend_cache" />
 	<property name="build" value="build" />
+	<property name="buildEcl" value="buildEcl" />
 	<property name="src" value="src" />
 	<property name="gen" value="gen" />
 	<property name="res.classes" value="res-classes" />
@@ -143,6 +144,11 @@
 			</fileset>
 		</copy>
 		<copy todir="${build}">
+			<fileset dir="${res.classes}">
+				<include name="**/*.class" />
+			</fileset>
+		</copy>
+		<copy todir="${buildEcl}">
 			<fileset dir="${res.classes}">
 				<include name="**/*.class" />
 			</fileset>

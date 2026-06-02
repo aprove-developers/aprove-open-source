@@ -1,7 +1,0 @@
-(format PTRS)
-(fun aShoot 0)
-(fun aWon 0)
-(fun bShoot 0)
-(fun bWon 0)
-(prule aShoot ((aWon :prob 3 ) (bShoot :prob 4 )))
-(prule bShoot ((bWon :prob 1 ) (aShoot :prob 3 )))

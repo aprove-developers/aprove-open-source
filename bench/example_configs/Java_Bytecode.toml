@@ -2,7 +2,7 @@ FOLDER="../examples"
 SUBDIR="Java_Bytecode"
 CATEGORY="default"
 # No handlers/default.sh; solver will fall back to __default__.sh
-TIMEOUT="10"
+TIMEOUT="30"
 #IMAGE=<DOCKER_IMAGE>
 OUTDIR="example_results/Java_Bytecode"
 APROVE_JAR="../dist/lib/aprove.jar"

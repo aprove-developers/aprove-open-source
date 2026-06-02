@@ -1,7 +1,7 @@
 FOLDER="../examples"
 SUBDIR="PTRS_Standard"
 CATEGORY="PTRS_AST"
-TIMEOUT="10"
+TIMEOUT="30"
 #IMAGE=<DOCKER_IMAGE>
 OUTDIR="example_results/PTRS_AST"
 APROVE_JAR="../dist/lib/aprove.jar"

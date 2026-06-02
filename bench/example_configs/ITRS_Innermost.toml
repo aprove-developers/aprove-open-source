@@ -1,8 +1,8 @@
 FOLDER="../examples"
-SUBDIR="Integer_Transition_Systems"
+SUBDIR="ITRS_Innermost"
 CATEGORY="ITRS_Innermost"
 # No handlers/ITRS_Innermost.sh; solver will fall back to __default__.sh
-TIMEOUT="10"
+TIMEOUT="30"
 #IMAGE=<DOCKER_IMAGE>
 OUTDIR="example_results/ITRS_Innermost"
 APROVE_JAR="../dist/lib/aprove.jar"
