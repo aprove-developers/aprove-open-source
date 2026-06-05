@@ -81,7 +81,7 @@ public class RedundantRuleProcessor implements Processor {
         // (rhs)
         Set<Rule> rhsRules = rules.stream()
                 .flatMap(rule1 -> rules.stream()
-                    .filter(rule2 -> rule1.getRight().equals(rule2.getLeft()))
+                    .filter(rule2 -> rule1.getRight().unifies(rule2.getLeft()))
                     .map(rule2 -> Rule.create(rule1.getLeft(), rule2.getRight())))
                 .collect(Collectors.toSet());
         rules.addAll(rhsRules);
