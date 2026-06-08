@@ -259,9 +259,8 @@ public class NonTerminationProbProofNode extends TreeNode<ProofNodeContent> {
     }
 
     /**
-     * Returns the maximum value among all values stored in this node.
-     *
-     * @return the highest BigFraction value in this node
+     * @return whether the maximum value is stored in the first component (AllCounts)
+     * or in the second component (OnlyOrthogonalCounts)
      */
 
     public boolean isMaxValueAllCounts() {

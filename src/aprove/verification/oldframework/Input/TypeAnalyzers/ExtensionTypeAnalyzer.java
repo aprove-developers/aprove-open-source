@@ -3,6 +3,7 @@ package aprove.verification.oldframework.Input.TypeAnalyzers;
 import java.io.*;
 import java.util.*;
 
+import aprove.input.Programs.haskell.StrictPositivityException;
 import aprove.input.Utility.*;
 import aprove.verification.oldframework.Input.*;
 import aprove.verification.oldframework.Rewriting.*;
@@ -44,7 +45,10 @@ public class ExtensionTypeAnalyzer implements TypeAnalyzer {
         }
         try {
             trans.translate(input);
-        } catch (final Exception e) {
+        } catch (final StrictPositivityException e){
+            throw e;
+        }
+        catch (final Exception e) {
             e.printStackTrace();
         }
         final Object prog = trans.getState();

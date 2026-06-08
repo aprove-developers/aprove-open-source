@@ -736,11 +736,11 @@ public class PTRS_AST_LoopWalkFinderProcessor extends PTRS_AST_ProblemProcessor 
                 final VerbosityLevel level) {
             final StringBuilder sb = new StringBuilder();
 
-            sb.append("We are able to disprove AST via [Submitted To IJCAR26].")
+            sb.append("We are able to disprove AST via [IJCAR'26].")
                 .append(o.linebreak())
                 .append(o.newline());
 
-            sb.append("We have a tree where the root occurs in every leaf, so we can embed a loop walk.");
+            sb.append("We have a tree where the root occurs in every leaf, so we can embed a loop walk [Thm.5].");
 
             final List<Integer> path = new ArrayList<>();
             path.add(1);

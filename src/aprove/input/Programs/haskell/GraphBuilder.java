@@ -185,8 +185,8 @@ public class GraphBuilder {
 
     private Occurrence argPolarity(String name) {
         if (datatypeNames.contains(name)) {
-            return Occurrence.GUARD_POS;
-//            return Occurrence.STRICT_POS;
+//            return Occurrence.GUARD_POS;
+            return Occurrence.STRICT_POS;
         }
         return Occurrence.MIXED;
     }

@@ -4,6 +4,7 @@ import aprove.verification.dpframework.HaskellProblem.HaskellProgram;
 import aprove.verification.oldframework.Haskell.Declarations.DataDecl;
 import aprove.verification.oldframework.Haskell.Declarations.HaskellDecl;
 import aprove.verification.oldframework.Haskell.Modules.HaskellEntity;
+import aprove.verification.oldframework.Haskell.Modules.Module;
 import aprove.verification.oldframework.Haskell.Modules.Modules;
 import aprove.verification.oldframework.Haskell.Modules.TyConsEntity;
 
@@ -11,27 +12,16 @@ import java.util.*;
 
 public class PositivityChecker {
 
-    public record Violation(String datatypeName, Occurrence loopOccurrence) {
-        @Override
-        public String toString() {
-            return datatypeName + " is not strictly positive" +
-                    " (self-loop polarity = " + loopOccurrence.toString() + ")";
-        }
-    }
-
-    public record Result(
-            OccurrenceGraph graph,
-            List<Violation> violations,
-            Map<String, Occurrence> selfLoops
-    ) {
-        public boolean isValid() {
-            return violations.isEmpty();
-        }
-    }
-
     private Result computeResult(Modules mods) {
 
-        final List<HaskellDecl> decls = mods.getMainModule().getDecls();
+        final Map<String, Module> modMap = mods.getModMap();
+        final List<HaskellDecl> decls = new ArrayList<>(List.of());
+
+        for (var module : modMap.values()) {
+            decls.addAll(module.getDecls());
+        }
+
+
         final List<DataDecl> dataDecl = decls.stream()
                 .filter(decl -> decl instanceof DataDecl)
                 .map(decl -> (DataDecl) decl)
@@ -57,6 +47,7 @@ public class PositivityChecker {
     }
 
     public void check(Modules mods) throws StrictPositivityException {
+        debug(mods);
         Result result = computeResult(mods);
         if (!result.isValid()) {
             StringBuilder sb = new StringBuilder();
@@ -65,7 +56,6 @@ public class PositivityChecker {
             throw new StrictPositivityException(sb.toString());
         }
     }
-
 
     public void debug(Modules mods) {
         System.out.println("=== Positivity check ===");
@@ -160,5 +150,23 @@ public class PositivityChecker {
 
     private String typeName(DataDecl decl) {
         return decl.getDefType().getToken().getText();
+    }
+
+    public record Violation(String datatypeName, Occurrence loopOccurrence) {
+        @Override
+        public String toString() {
+            return datatypeName + " is not strictly positive" +
+                    " (self-loop polarity = " + loopOccurrence.toString() + ")";
+        }
+    }
+
+    public record Result(
+            OccurrenceGraph graph,
+            List<Violation> violations,
+            Map<String, Occurrence> selfLoops
+    ) {
+        public boolean isValid() {
+            return violations.isEmpty();
+        }
     }
 }

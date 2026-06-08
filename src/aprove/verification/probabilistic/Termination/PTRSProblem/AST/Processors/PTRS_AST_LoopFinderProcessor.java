@@ -741,18 +741,29 @@ public class PTRS_AST_LoopFinderProcessor extends PTRS_AST_ProblemProcessor {
             final StringBuilder sb = new StringBuilder();
             final boolean hasPumpingSub = this.loopTree.getValue().getZ().get(this.disproveID).getY() != null;
 
-            sb.append("We are able to disprove AST via [Submitted To IJCAR26].")
+            sb.append("We are able to disprove AST via [IJCAR'26].")
                 .append(o.linebreak())
                 .append(o.newline());
 
             if (this.loopwalk) {
-                sb.append("We have a single loop without any branching, so we can embed a loop walk.");
+                sb.append("We have a single loop without any branching, so we can embed a loop walk [Thm.5].");
             } else if (!hasPumpingSub) {
-                sb.append("We count the term:")
+                if(loopTree.getValue().getZ().get(this.disproveID).getX().isLinear()) { //Linear term
+                    sb.append("We use [Thm.11] and count the linear term:")
+                        .append(o.linebreak())
+                        .append(this.loopTree.getValue().getZ().get(this.disproveID).getX());
+                } else if(loopTree.isMaxValueAllCounts()) { //NVD tree
+                    sb.append("We use [Thm.15] on a tree that is NVD and count the term:")
                     .append(o.linebreak())
                     .append(this.loopTree.getValue().getZ().get(this.disproveID).getX());
+                } else { //Orthogonal counts
+                    sb.append("We use [Thm.17] and count the following term at orthogonal positions:")
+                    .append(o.linebreak())
+                    .append(this.loopTree.getValue().getZ().get(this.disproveID).getX());
+                }
+                
             } else {
-                sb.append("We count the pumping substitution:")
+                sb.append("We use [Thm.28] and count the pumping substitution:")
                     .append(o.linebreak())
                     .append(this.loopTree.getValue().getZ().get(this.disproveID).getY())
                     .append(o.linebreak())
