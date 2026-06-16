@@ -47,7 +47,7 @@ public class PositivityChecker {
     }
 
     public void check(Modules mods) throws StrictPositivityException {
-        debug(mods);
+//        debug(mods);
         Result result = computeResult(mods);
         if (!result.isValid()) {
             StringBuilder sb = new StringBuilder();

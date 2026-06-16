@@ -77,8 +77,8 @@ public class OccurrenceGraph {
      */
     public Occurrence transitiveOccurrence(Node source, Node target) {
         //DFS: seen = pairs already explored
-        Set<Map.Entry<Occurrence, Node>> seen = new HashSet<>();
-        return dfs(source, target, Optional.empty(), Optional.empty(), seen).orElse(Occurrence.STRICT_POS);
+        Set<Map.Entry<Node, Node>> seen = new HashSet<>();
+        return dfs(Optional.empty() ,source, target, Optional.empty(), Optional.empty(), seen).orElse(Occurrence.STRICT_POS);
     }
 
     /**
@@ -93,14 +93,15 @@ public class OccurrenceGraph {
      * @return polarity
      */
     private Optional<Occurrence> dfs(
+            Optional<Node> previous,
             Node current,
             Node target,
             Optional<Occurrence> pathPol,
             Optional<Occurrence> acc,
-            Set<Map.Entry<Occurrence, Node>> seen
+            Set<Map.Entry<Node, Node>> seen
     ) {
-        if (pathPol.isPresent()) {
-            var key = Map.entry(pathPol.get(), current);
+        if (previous.isPresent()) {
+            var key = Map.entry(previous.get(), current);
             if (seen.contains(key)) return acc;
             seen.add(key);
         }
@@ -119,10 +120,10 @@ public class OccurrenceGraph {
             Node next = entry.getKey();
             Occurrence edgeOcc = entry.getValue();
             Occurrence newPath = pathPol
-                    .map(p -> p.oplus(edgeOcc))
+                    .map(p -> p.otimes(edgeOcc))
                     .orElse(edgeOcc);
             if (newPath == Occurrence.UNUSED) continue; //dead path
-            acc = dfs(next, target, Optional.of(newPath), acc, seen);
+            acc = dfs(Optional.of(current), next, target, Optional.of(newPath), acc, seen);
             if (acc.isPresent() && acc.get() == Occurrence.MIXED) return acc;
         }
 
