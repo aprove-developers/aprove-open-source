@@ -1,16 +1,21 @@
 package aprove.input.Programs.haskell;
 
-import aprove.verification.dpframework.HaskellProblem.HaskellProgram;
 import aprove.verification.oldframework.Haskell.Declarations.DataDecl;
 import aprove.verification.oldframework.Haskell.Declarations.HaskellDecl;
-import aprove.verification.oldframework.Haskell.Modules.HaskellEntity;
+import aprove.verification.oldframework.Haskell.Declarations.SynTypeDecl;
 import aprove.verification.oldframework.Haskell.Modules.Module;
 import aprove.verification.oldframework.Haskell.Modules.Modules;
-import aprove.verification.oldframework.Haskell.Modules.TyConsEntity;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 public class PositivityChecker {
+
+    private static String typeName(DataDecl decl) {
+        return decl.getDefType().getToken().getText();
+    }
 
     private Result computeResult(Modules mods) {
 
@@ -27,8 +32,13 @@ public class PositivityChecker {
                 .map(decl -> (DataDecl) decl)
                 .toList();
 
+        final List<SynTypeDecl> synTypeDecls = decls.stream()
+                .filter(decl -> decl instanceof SynTypeDecl)
+                .map(decl -> (SynTypeDecl) decl)
+                .toList();
+
         GraphBuilder builder = new GraphBuilder();
-        OccurrenceGraph graph = builder.buildFromDataDecl(dataDecl);
+        OccurrenceGraph graph = builder.buildFromDataDecl(dataDecl, synTypeDecls);
 
         List<Violation> violations = new ArrayList<>();
         Map<String, Occurrence> selfLoops = new LinkedHashMap<>();
@@ -39,7 +49,7 @@ public class PositivityChecker {
             selfLoops.put(typeName(d), loop);
 
             if (loop.isNotStrictlyPositive()) {
-                violations.add(new Violation(typeName(d), loop));
+                violations.add(new Violation(d, loop));
             }
         }
 
@@ -81,82 +91,19 @@ public class PositivityChecker {
         System.out.println();
     }
 
-    public void removeStrictPositives(HaskellProgram program) {
-        final Set<HaskellEntity> exportEntities = program.getModules().getMainModule().getExportEntities();
-        final List<TyConsEntity> consEntityList = exportEntities.stream()
-                .filter(cons -> cons instanceof TyConsEntity)
-                .map(cons -> (TyConsEntity) cons)
-                .toList();
-        final GraphBuilder graphBuilder = new GraphBuilder();
-        final OccurrenceGraph graph = graphBuilder.buildFromTyConsEntity(consEntityList);
-        List<TyConsEntity> removeList = new ArrayList<>();
-
-        for (TyConsEntity cons : consEntityList) {
-            var defNode = new OccurrenceGraph.DefNode(cons.getName());
-            var loop = graph.transitiveOccurrence(defNode, defNode);
-
-            if (loop.isNotStrictlyPositive()) {
-                removeList.add(cons);
-            }
-        }
-
-        Set<HaskellEntity> newSet = new HashSet<>();
-
-        for (HaskellEntity cons : exportEntities) {
-            if (!(cons instanceof TyConsEntity)) {
-                newSet.add(cons);
-            } else if (!removeList.contains(cons)) {
-                newSet.add(cons);
-            }
-
-        }
-
-        program.getModules().getMainModule().setExportEntities(newSet);
-//            program.getModules().getMainModule().setExpEntities(newSet);
-    }
-
-    public void removeStrictPositives(Modules modules) {
-//        debug(modules);
-        final List<HaskellDecl> decls = modules.getMainModule().getDecls();
-        final List<DataDecl> dataDecl = decls.stream()
-                .filter(decl -> decl instanceof DataDecl)
-                .map(decl -> (DataDecl) decl)
-                .toList();
-
-        GraphBuilder builder = new GraphBuilder();
-        OccurrenceGraph graph = builder.buildFromDataDecl(dataDecl);
-
-        Set<String> notStrictPositive = new HashSet<>();
-        for (DataDecl d : dataDecl) {
-            String s = typeName(d);
-            var defNode = new OccurrenceGraph.DefNode(s);
-            if (graph.transitiveOccurrence(defNode, defNode).isNotStrictlyPositive()) {
-                notStrictPositive.add(s);
-            }
-        }
-
-        List<HaskellDecl> newList = new ArrayList<>();
-
-        for (HaskellDecl decl : decls) {
-            if (!(decl instanceof DataDecl dd) || !notStrictPositive.contains(typeName(dd))) {
-                newList.add(decl);
-            }
-        }
-
-
-        modules.getMainModule().setDecls(newList);
-//        debug(modules);
-    }
-
-    private String typeName(DataDecl decl) {
-        return decl.getDefType().getToken().getText();
-    }
-
-    public record Violation(String datatypeName, Occurrence loopOccurrence) {
+    public record Violation(DataDecl datatype, Occurrence loopOccurrence) {
         @Override
         public String toString() {
-            return datatypeName + " is not strictly positive" +
+            return typeName(datatype) + " is not strictly positive" +
                     " (self-loop polarity = " + loopOccurrence.toString() + ")";
+        }
+
+        public DataDecl decl() {
+            return datatype;
+        }
+
+        public Occurrence occ() {
+            return loopOccurrence;
         }
     }
 

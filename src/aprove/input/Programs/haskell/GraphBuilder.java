@@ -4,6 +4,7 @@ import aprove.verification.oldframework.Haskell.BasicTerms.Apply;
 import aprove.verification.oldframework.Haskell.BasicTerms.Cons;
 import aprove.verification.oldframework.Haskell.BasicTerms.Var;
 import aprove.verification.oldframework.Haskell.Declarations.DataDecl;
+import aprove.verification.oldframework.Haskell.Declarations.SynTypeDecl;
 import aprove.verification.oldframework.Haskell.HaskellObject;
 import aprove.verification.oldframework.Haskell.Modules.TyConsEntity;
 import aprove.verification.oldframework.Haskell.Typing.DataCon;
@@ -25,8 +26,10 @@ public class GraphBuilder {
         this.graph = new OccurrenceGraph();
     }
 
-    public OccurrenceGraph buildFromDataDecl(List<DataDecl> dataDecls) {
+    public OccurrenceGraph buildFromDataDecl(List<DataDecl> dataDecls, List<SynTypeDecl>  synTypeDecls) {
         dataDecls.forEach(d -> datatypeNames.add(d.getDefType().getToken().getText()));
+        synTypeDecls.forEach(d -> datatypeNames.add(d.getDefType().getToken().getText()));
+        synTypeDecls.forEach(this::processSynTypes);
         dataDecls.forEach(this::processDataDecl);
         return graph;
     }
@@ -41,6 +44,34 @@ public class GraphBuilder {
         }
 
         return graph;
+    }
+
+    private void processSynTypes(SynTypeDecl synTypeDecl) {
+        currentDef = synTypeDecl.getDefType().getToken().getText();
+        paramIndex = new HashMap<>();
+
+        if  (synTypeDecl.getDefType() instanceof Apply apply) {
+            //collect vars from data declaration
+            List<HaskellObject> vars = new ArrayList<>();
+            var _ = flattenApp(apply, vars);
+
+            //add vars to paramIndex with innermost index 0
+            IntStream.range(0, vars.size())
+                    .forEach(index -> paramIndex.put(((Var) vars.get(index)).getSymbol().toString(), index));
+        }
+
+        graph.addEdge(
+                new OccurrenceGraph.DefNode(currentDef),
+                new OccurrenceGraph.DefNode(currentDef),
+                Occurrence.UNUSED
+        );
+
+        walkType(
+                synTypeDecl.getType(),
+                Occurrence.STRICT_POS,
+                new OccurrenceGraph.DefNode(currentDef)
+        );
+
     }
 
     private void processDataDecl(DataDecl dd) {
