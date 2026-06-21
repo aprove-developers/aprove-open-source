@@ -1,5 +1,9 @@
 package aprove.input.Programs.haskell;
 
+import aprove.input.Generated.haskell.node.Switch;
+import aprove.input.Generated.haskell.node.Token;
+import aprove.input.Generated.haskell.parser.ParserException;
+import aprove.input.Utility.ParseError;
 import aprove.verification.oldframework.Haskell.Declarations.DataDecl;
 import aprove.verification.oldframework.Haskell.Declarations.HaskellDecl;
 import aprove.verification.oldframework.Haskell.Declarations.SynTypeDecl;
@@ -25,7 +29,6 @@ public class PositivityChecker {
         for (var module : modMap.values()) {
             decls.addAll(module.getDecls());
         }
-
 
         final List<DataDecl> dataDecl = decls.stream()
                 .filter(decl -> decl instanceof DataDecl)
@@ -73,6 +76,7 @@ public class PositivityChecker {
 
         System.out.println("Occurrence graph:");
         System.out.println(result.graph.toStringWithoutUnused());
+        System.out.println(result.graph);
 
         System.out.println("Self-loop polarities:");
         for (Map.Entry<String, Occurrence> entry : result.selfLoops().entrySet()) {
@@ -94,7 +98,9 @@ public class PositivityChecker {
     public record Violation(DataDecl datatype, Occurrence loopOccurrence) {
         @Override
         public String toString() {
-            return typeName(datatype) + " is not strictly positive" +
+//            return typeName(datatype) + " is not strictly positive" +
+//                    " (self-loop polarity = " + loopOccurrence.toString() + ")";
+            return typeName(datatype) + " at line " + datatype.getToken().getLine() + " is not strictly positive" +
                     " (self-loop polarity = " + loopOccurrence.toString() + ")";
         }
 
