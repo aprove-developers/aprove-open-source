@@ -66,12 +66,12 @@ public enum Occurrence {
 
     public String toPrettyString() {
         return switch (this) {
-            case MIXED -> "*";
-            case JUST_NEG -> "~";
+            case MIXED -> "±";
+            case JUST_NEG -> "-";
             case JUST_POS -> "+";
             case STRICT_POS -> "++";
 //            case GUARD_POS -> "g+";
-            case UNUSED -> "_";
+            case UNUSED -> "0";
         };
     }
 }
