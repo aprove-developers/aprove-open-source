@@ -40,6 +40,7 @@ public class Translator extends TranslatorSkeleton {
             CommonTokenStream tokens = new CommonTokenStream(lex);
             ariTrsParser parser = new ariTrsParser(tokens);
             RawAriTrs rawptrs = parser.trs();
+            this.applyCliOverrides(rawptrs);
             ObligationCreator obc = new ObligationCreator(rawptrs);
             this.setState(obc.buildObligation());
             this.language = obc.getLanguage();
@@ -55,6 +56,47 @@ public class Translator extends TranslatorSkeleton {
             this.getErrors().add(pe);
         } catch (ObligationCreatorException e) {
             this.getErrors().addAll(e.getParseErrors());
+        }
+    }
+
+    private void applyCliOverrides(final RawAriTrs rawptrs) {
+        final CliOverrides overrides = CliOverrides.get();
+        if (overrides == null) {
+            return;
+        }
+        if (overrides.goal != null) {
+            rawptrs.setAst(false);
+            rawptrs.setSast(false);
+            rawptrs.setTermination(false);
+            rawptrs.setComplexity(false);
+            rawptrs.setConfluence(false);
+            rawptrs.setInfeasibility(false);
+            rawptrs.setPast(false);
+            switch (overrides.goal) {
+                case "ast":          rawptrs.setAst(true);          break;
+                case "sast":         rawptrs.setSast(true);         break;
+                case "termination":  rawptrs.setTermination(true);  break;
+                case "complexity":   rawptrs.setComplexity(true);   break;
+                case "confluence":   rawptrs.setConfluence(true);   break;
+                case "infeasibility": rawptrs.setInfeasibility(true); break;
+                case "past":         rawptrs.setPast(true);         break;
+                default: System.err.println("Unknown --goal value: " + overrides.goal);
+            }
+        }
+        if (overrides.rewriteStrategy != null) {
+            switch (overrides.rewriteStrategy) {
+                case "innermost": rawptrs.setInnermost(); break;
+                case "outermost": rawptrs.setOutermost(); break;
+                case "full":      rawptrs.setFullRewriting(); break;
+                default: System.err.println("Unknown --rewrite-strategy value: " + overrides.rewriteStrategy);
+            }
+        }
+        if (overrides.startTerm != null) {
+            switch (overrides.startTerm) {
+                case "basic": rawptrs.setBasic(true);  break;
+                case "all":   rawptrs.setBasic(false); break;
+                default: System.err.println("Unknown --startterm value: " + overrides.startTerm);
+            }
         }
     }
 

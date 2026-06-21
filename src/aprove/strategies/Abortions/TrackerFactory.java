@@ -35,6 +35,7 @@ public abstract class TrackerFactory {
      * (due to children remaining untracked)
      */
     public static TimeTracker process(Abortion abortion, Process process) {
+        ProcessRegistry.register(process);
         TrackProcess result = TrackProcess.create(process, abortion);
         result.start();
         return result;

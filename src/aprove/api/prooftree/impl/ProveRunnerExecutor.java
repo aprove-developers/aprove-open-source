@@ -54,8 +54,6 @@ public class ProveRunnerExecutor implements Runnable {
     }
 
     private String getMessage() {
-        return Optional.ofNullable(this.runner.getResult())
-                       .map(Object::toString)
-                       .orElse("stopped by user");
+        return this.runner.getRoot().getTruthValue().toWstString();
     }
 }

@@ -1798,6 +1798,7 @@ declare PTRS_AST_ExpectedDirectPOLO = aprove.verification.probabilistic.Terminat
 declare PTRS_AST_DirectMATRO = aprove.verification.probabilistic.Termination.PTRSProblem.AST.Processors.PTRS_AST_DirectMatroProcessor
 declare PTRS_AST_LoopFinder = aprove.verification.probabilistic.Termination.PTRSProblem.AST.Processors.PTRS_AST_LoopFinderProcessor
 declare PTRS_AST_LoopWalkFinder = aprove.verification.probabilistic.Termination.PTRSProblem.AST.Processors.PTRS_AST_LoopWalkFinderProcessor
+declare PTRS_AST_DecidableRNT = aprove.verification.probabilistic.Termination.PTRSProblem.AST.Processors.PTRS_AST_DecidableRNTProcessor
 
 declare PQTRS_AST_toADP = aprove.verification.probabilistic.Termination.PTRSProblem.AST.Processors.PQTRS_AST_ToADPProblemProcessor
 

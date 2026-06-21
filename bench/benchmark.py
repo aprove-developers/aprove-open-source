@@ -70,8 +70,13 @@ def parse_args() -> argparse.Namespace:
                         help="Randomly sample N files from the (filtered) problem set.")
     parser.add_argument("--sample-pct", type=int, metavar="PCT",
                         help="Randomly sample PCT%% of the (filtered) problem set (1-100). Ignored if --sample is set.")
+    parser.add_argument("--seed", type=int, metavar="SEED",
+                        help="Random seed for --sample / --sample-pct (for reproducibility).")
     parser.add_argument("--runall", type=Path, metavar="DIR",
                         help="Run every *.toml config found in DIR, forwarding all other flags to each run.")
+    parser.add_argument("--clean-conflicts", action="store_true", default=argparse.SUPPRESS,
+                        help="Remove all conflict rows from --flat-csv, keeping only the most recent row per "
+                             "(Problem, Category) with Conflict=NONE. Requires --flat-csv. Does not run benchmarks.")
     parser.add_argument("--cert", action="store_true", default=argparse.SUPPRESS,
                         help="Pass --cert to the solver, requesting CPF certificate output.")
     return parser.parse_args()
@@ -112,6 +117,7 @@ def build_config(cli: argparse.Namespace) -> dict[str, str | Path]:
         ("RERUN", "rerun"),
         ("SAMPLE", "sample"),
         ("SAMPLE_PCT", "sample_pct"),
+        ("SEED", "seed"),
         ("LOCAL", "local"),
         ("LOCAL_JAVA", "local_java"),
         ("CERT", "cert"),
@@ -174,7 +180,7 @@ def _docker_kill(cid_file: Path) -> None:
         pass
 
 
-def _maybe_append_flat(cfg: dict[str, str | Path], file_path: Path, root: Path, result: str) -> None:
+def _maybe_append_flat(cfg: dict[str, str | Path], file_path: Path, root: Path, result: str, time_ms: int | None = None) -> None:
     flat_csv = cfg.get("FLAT_CSV")
     if not flat_csv:
         return
@@ -189,12 +195,13 @@ def _maybe_append_flat(cfg: dict[str, str | Path], file_path: Path, root: Path, 
         timeout=str(cfg.get("TIMEOUT", "")),
         category=str(cfg.get("CATEGORY", "")),
         commit_id=str(cfg.get("COMMIT_ID", "unknown")),
+        time_ms=time_ms,
     )
 
 
-def run_file(cfg: dict[str, str | Path], file_path: Path, root: Path, outdir: Path, mem_flags: list[str]) -> tuple[Path, str, str]:
+def run_file(cfg: dict[str, str | Path], file_path: Path, root: Path, outdir: Path, mem_flags: list[str]) -> tuple[Path, str, str, int | None]:
     if STOP_EVENT.is_set():
-        return file_path, "", "cancelled"
+        return file_path, "", "cancelled", None
     clean_file = Path(str(file_path)).as_posix().replace("//", "/")
     cid_file = Path(tempfile.mktemp(suffix=".cid", prefix="aprove_"))
     cmd = [
@@ -212,7 +219,8 @@ def run_file(cfg: dict[str, str | Path], file_path: Path, root: Path, outdir: Pa
         clean_file,
     ]
     try:
-        deadline = time.monotonic() + int(cfg["TIMEOUT"]) + KILL_GRACE
+        t_start = time.monotonic()
+        deadline = t_start + int(cfg["TIMEOUT"]) + KILL_GRACE
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, preexec_fn=os.setsid if hasattr(os, "setsid") else None)
         killed_by_script = False
         try:
@@ -229,7 +237,7 @@ def run_file(cfg: dict[str, str | Path], file_path: Path, root: Path, outdir: Pa
                         except subprocess.TimeoutExpired:
                             proc.kill()
                             stdout, stderr = proc.communicate()
-                        return file_path, stdout or "", "cancelled"
+                        return file_path, stdout or "", "cancelled", None
                     if time.monotonic() >= deadline:
                         _docker_kill(cid_file)
                         proc.kill()
@@ -238,29 +246,30 @@ def run_file(cfg: dict[str, str | Path], file_path: Path, root: Path, outdir: Pa
                         break
         finally:
             cid_file.unlink(missing_ok=True)
+        elapsed_ms = int((time.monotonic() - t_start) * 1000)
         output = stdout or ""
         if killed_by_script:
             if outdir:
-                serialize_result.serialize(outdir, root, file_path, "KILLED", False)
-            _maybe_append_flat(cfg, file_path, root, "KILLED")
-            return file_path, "KILLED", ""
+                serialize_result.serialize(outdir, root, file_path, "KILLED", False, elapsed_ms)
+            _maybe_append_flat(cfg, file_path, root, "KILLED", elapsed_ms)
+            return file_path, "KILLED", "", elapsed_ms
         if stderr and outdir:
             (outdir / "error.log").open("a", encoding="utf-8").write(f"=== {datetime.datetime.now().isoformat(timespec='seconds')} {clean_file} ===\n{stderr}\n\n")
     except Exception as exc:  # noqa: BLE001
-        return file_path, "", f"error invoking docker: {exc}"
+        return file_path, "", f"error invoking docker: {exc}", None
 
     raw_first_line = bool(cfg.get("RAW_RESULT", False))
     if outdir:
-        serialize_result.serialize(outdir, root, file_path, output, raw_first_line)
+        serialize_result.serialize(outdir, root, file_path, output, raw_first_line, elapsed_ms)
     first_line = output.splitlines()[0] if output else ""
     normalised = first_line if (raw_first_line or first_line in serialize_result.VALID_RESULTS) else "ERROR"
-    _maybe_append_flat(cfg, file_path, root, normalised)
-    return file_path, output, ""
+    _maybe_append_flat(cfg, file_path, root, normalised, elapsed_ms)
+    return file_path, output, "", elapsed_ms
 
 
-def run_file_local(cfg: dict[str, str | Path], file_path: Path, root: Path, outdir: Path) -> tuple[Path, str, str]:
+def run_file_local(cfg: dict[str, str | Path], file_path: Path, root: Path, outdir: Path) -> tuple[Path, str, str, int | None]:
     if STOP_EVENT.is_set():
-        return file_path, "", "cancelled"
+        return file_path, "", "cancelled", None
     clean_file = str(file_path)
     solver = Path(__file__).resolve().parent / "solver"
     env = os.environ.copy()
@@ -275,7 +284,8 @@ def run_file_local(cfg: dict[str, str | Path], file_path: Path, root: Path, outd
         clean_file,
     ]
     try:
-        deadline = time.monotonic() + int(cfg["TIMEOUT"]) + KILL_GRACE
+        t_start = time.monotonic()
+        deadline = t_start + int(cfg["TIMEOUT"]) + KILL_GRACE
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                                 env=env, preexec_fn=os.setsid if hasattr(os, "setsid") else None)
         pgid = os.getpgid(proc.pid) if hasattr(os, "getpgid") else None
@@ -295,7 +305,7 @@ def run_file_local(cfg: dict[str, str | Path], file_path: Path, root: Path, outd
                         except subprocess.TimeoutExpired:
                             proc.kill()
                             stdout, stderr = proc.communicate()
-                        return file_path, stdout or "", "cancelled"
+                        return file_path, stdout or "", "cancelled", None
                     if time.monotonic() >= deadline:
                         if pgid is not None:
                             _kill_pgroup(pgid)
@@ -306,24 +316,25 @@ def run_file_local(cfg: dict[str, str | Path], file_path: Path, root: Path, outd
         finally:
             if pgid is not None:
                 _kill_pgroup(pgid)
+            elapsed_ms = int((time.monotonic() - t_start) * 1000)
         output = stdout or ""
         if killed_by_script:
             if outdir:
-                serialize_result.serialize(outdir, root, file_path, "KILLED", False)
-            _maybe_append_flat(cfg, file_path, root, "KILLED")
-            return file_path, "KILLED", ""
+                serialize_result.serialize(outdir, root, file_path, "KILLED", False, elapsed_ms)
+            _maybe_append_flat(cfg, file_path, root, "KILLED", elapsed_ms)
+            return file_path, "KILLED", "", elapsed_ms
         if stderr and outdir:
             (outdir / "error.log").open("a", encoding="utf-8").write(f"=== {datetime.datetime.now().isoformat(timespec='seconds')} {clean_file} ===\n{stderr}\n\n")
     except Exception as exc:  # noqa: BLE001
-        return file_path, "", f"error invoking solver: {exc}"
+        return file_path, "", f"error invoking solver: {exc}", None
 
     raw_first_line = bool(cfg.get("RAW_RESULT", False))
     if outdir:
-        serialize_result.serialize(outdir, root, file_path, output, raw_first_line)
+        serialize_result.serialize(outdir, root, file_path, output, raw_first_line, elapsed_ms)
     first_line = output.splitlines()[0] if output else ""
     normalised = first_line if (raw_first_line or first_line in serialize_result.VALID_RESULTS) else "ERROR"
-    _maybe_append_flat(cfg, file_path, root, normalised)
-    return file_path, output, ""
+    _maybe_append_flat(cfg, file_path, root, normalised, elapsed_ms)
+    return file_path, output, "", elapsed_ms
 
 
 def monitor_progress(total: int, done_ref: dict[str, int], lock: threading.Lock) -> None:
@@ -403,6 +414,44 @@ def _query_result_labels(cfg: dict, category: str, local: bool, extra_docker_fla
     return _DEFAULT_RESULT_LABELS
 
 
+def clean_conflicts(flat_csv: Path) -> int:
+    if not flat_csv.exists():
+        print(f"ERROR: {flat_csv} does not exist.", file=sys.stderr)
+        return 1
+    with flat_csv.open(encoding="utf-8", newline="") as fh:
+        rows = list(csv.DictReader(fh, delimiter=";"))
+    if not rows:
+        print("Nothing to clean.")
+        return 0
+
+    # Keep only the most recent row per (Problem, Category), reset Conflict to NONE
+    seen: dict[tuple[str, str], dict] = {}
+    for row in rows:
+        key = (row.get("Problem", ""), row.get("Category", ""))
+        seen[key] = row  # last row wins (CSV is appended in order)
+
+    fieldnames = list(rows[0].keys())
+    if "Conflict" not in fieldnames:
+        fieldnames.append("Conflict")
+
+    cleaned = []
+    for row in seen.values():
+        row = dict(row)
+        row["Conflict"] = "NONE"
+        cleaned.append(row)
+
+    cleaned.sort(key=lambda r: (r.get("Category", ""), r.get("Problem", "")))
+
+    with flat_csv.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames, delimiter=";", extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(cleaned)
+
+    removed = len(rows) - len(cleaned)
+    print(f"Cleaned {flat_csv}: kept {len(cleaned)} row(s), removed {removed} conflict row(s).")
+    return 0
+
+
 def run_all_configs(runall_dir: Path) -> int:
     configs = sorted(p for p in runall_dir.glob("*.toml") if not p.name.startswith("_"))
     if not configs:
@@ -444,6 +493,13 @@ def run_all_configs(runall_dir: Path) -> int:
 
 def main() -> int:
     cli = parse_args()
+
+    if getattr(cli, "clean_conflicts", False):
+        flat_csv_arg = getattr(cli, "flat_csv", None)
+        if not flat_csv_arg:
+            print("ERROR: --clean-conflicts requires --flat-csv.", file=sys.stderr)
+            return 2
+        return clean_conflicts(Path(str(flat_csv_arg)))
 
     runall_dir = getattr(cli, "runall", None)
     if runall_dir:
@@ -532,7 +588,7 @@ def main() -> int:
         outdir.mkdir(parents=True, exist_ok=True)
         (outdir / "results").mkdir(parents=True, exist_ok=True)
         if not resume and not rerun:
-            (outdir / "summary.csv").write_text("File;Result;FullResult;InputPath\n", encoding="utf-8")
+            (outdir / "summary.csv").write_text("File;Result;FullResult;InputPath;Time_ms\n", encoding="utf-8")
 
     files = filter_files(files, root, outdir, resume, rerun)
 
@@ -544,8 +600,11 @@ def main() -> int:
         n = int(sample)
         if n < len(files):
             total_before = len(files)
-            files = sorted(random.sample(files, n))
-            print(f"Sample: randomly selected {n} of {total_before} file(s).")
+            seed = cfg.get("SEED")
+            rng = random.Random(int(seed)) if seed is not None else random
+            files = sorted(rng.sample(files, n))
+            seed_info = f", seed={seed}" if seed is not None else ""
+            print(f"Sample: randomly selected {n} of {total_before} file(s){seed_info}.")
 
     total = len(files)
 
@@ -564,7 +623,7 @@ def main() -> int:
             with lock:
                 done_ref["count"] += 1
             try:
-                _, _, err = fut.result()
+                _, _, err, _ = fut.result()
                 if err and err != "cancelled":
                     print(err, file=sys.stderr)
             except Exception as exc:  # noqa: BLE001
@@ -606,10 +665,12 @@ def main() -> int:
     flat_csv = cfg.get("FLAT_CSV")
     if flat_csv:
         flat_path = Path(str(flat_csv))
-        contra, bad, good, breaking = 0, 0, 0, 0
+        contra, bad, good, breaking, faster = 0, 0, 0, 0, 0
         contra_rows: list[str] = []
         bad_rows: list[str] = []
         breaking_rows: list[str] = []
+        # For FASTER: group rows by (problem, category) to pair old and new times
+        by_key: dict[tuple[str, str], list[dict]] = {}
         if flat_path.exists():
             with flat_path.open(encoding="utf-8", newline="") as fh:
                 for row in csv.DictReader(fh, delimiter=";"):
@@ -626,13 +687,18 @@ def main() -> int:
                     elif conflict == "BROKEN":
                         breaking += 1
                         breaking_rows.append(entry)
-        if contra or bad or good or breaking:
+                    elif conflict == "FASTER":
+                        faster += 1
+                    key = (row.get("Problem", ""), row.get("Category", ""))
+                    by_key.setdefault(key, []).append(row)
+        if contra or bad or good or breaking or faster:
             print(f"\n{'Conflict':<10} {'Rows':>6}")
             print(f"{'-'*10} {'-'*6}")
             print(f"{'BROKEN':<10} {breaking:>6}")
             print(f"{'CONTRA':<10} {contra:>6}")
             print(f"{'BAD':<10} {bad:>6}")
             print(f"{'GOOD':<10} {good:>6}")
+            print(f"{'FASTER':<10} {faster:>6}")
             for label, rows in [("BROKEN", breaking_rows), ("CONTRA", contra_rows), ("BAD", bad_rows)]:
                 if rows:
                     seen: set[str] = set()
@@ -640,6 +706,26 @@ def main() -> int:
                     print(f"\n{label} conflicts ({len(unique)} problem(s)):")
                     for r in unique:
                         print(r)
+            if faster:
+                faster_details: list[tuple[int, str]] = []
+                for key, rows in by_key.items():
+                    new_rows = [r for r in rows if r.get("Conflict", "") == "FASTER"]
+                    old_rows = [r for r in rows if r.get("Conflict", "") != "FASTER"]
+                    for new_row in new_rows:
+                        problem, category, result = key[0], key[1], new_row.get("Result", "")
+                        old_time = old_rows[-1].get("Time_ms", "") if old_rows else ""
+                        new_time = new_row.get("Time_ms", "")
+                        try:
+                            old_ms, new_ms = int(old_time), int(new_time)
+                            saved_pct = int((old_ms - new_ms) / old_ms * 100)
+                            line = f"  {problem}  [{category}]  {result}: {old_ms}ms → {new_ms}ms (-{saved_pct}%)"
+                            faster_details.append((old_ms - new_ms, line))
+                        except (ValueError, TypeError):
+                            faster_details.append((0, f"  {problem}  [{category}]  {result}"))
+                faster_details.sort(key=lambda x: -x[0])
+                print(f"\nFASTER ({len(faster_details)} problem(s)):")
+                for _, line in faster_details:
+                    print(line)
 
     return exit_code
 

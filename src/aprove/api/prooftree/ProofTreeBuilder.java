@@ -25,7 +25,7 @@ public interface ProofTreeBuilder {
         BeforeListener timeout(Timeout timeout);
     }
 
-    public static interface BeforeListener {
+    public static interface BeforeListener extends BeforeConstruct {
 
         BeforeConstruct listener(ProofTreeListener proofTreeListener);
     }

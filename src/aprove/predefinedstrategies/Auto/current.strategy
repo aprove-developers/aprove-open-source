@@ -1890,7 +1890,9 @@ ptrs_i_TERM = PTRS_toQTRS : qtrs
 # =============== (innermost) AST of PTRS ==================== #
 # ============================================================ #
 
-ptrs_AST = CombineParallel(disprove_AST, prove_AST)
+# ptrs_AST = CombineParallel(disprove_AST, prove_AST)
+
+ptrs_AST = Solve(PTRS_AST_DecidableRNT)
 
 disprove_AST = CombineParallel(
                  Timer(5000,

@@ -1,5 +1,6 @@
 package aprove.runtime;
 
+import aprove.prooftree.Obligations.*;
 import aprove.strategies.ExecutableStrategies.*;
 
 /**
@@ -10,4 +11,6 @@ public interface ProveRunner {
     public boolean run();
 
     public ExecutableStrategy getResult();
+
+    public ObligationNode getRoot();
 }

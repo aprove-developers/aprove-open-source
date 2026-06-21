@@ -15,6 +15,7 @@ class TrackProcessByWall extends TrackProcess {
 
     @Override
     public void kill() {
+        ProcessRegistry.deregister(this.process);
         this.process.destroy();
     }
 
@@ -23,6 +24,7 @@ class TrackProcessByWall extends TrackProcess {
         if (this.isRunning()) {
             this.updateTime(System.currentTimeMillis());
         } else {
+            ProcessRegistry.deregister(this.process);
             TimeRefresher.deregister(this);
         }
     }

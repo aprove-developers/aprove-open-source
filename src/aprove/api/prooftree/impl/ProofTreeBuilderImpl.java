@@ -3,7 +3,6 @@ package aprove.api.prooftree.impl;
 import java.nio.file.*;
 import java.util.*;
 
-import aprove.api.impl.*;
 import aprove.api.prooftree.*;
 import aprove.api.prooftree.ProofTreeBuilder.*;
 import aprove.exit.*;
@@ -17,15 +16,24 @@ public class ProofTreeBuilderImpl implements
                                   BeforeListener,
                                   BeforeConstruct {
 
-    private final AnalyzableProblemInputImpl analyzableProblemInput;
+    private static final ProofTreeListener NO_OP_LISTENER = new ProofTreeListener() {
+        @Override public void createRoot(ProofTreeNode n) {}
+        @Override public void createChild(ProofTreeNode n) {}
+        @Override public void createProof(ProofTreeNode n) {}
+        @Override public void setTruth(ProofTreeNode n, String t) {}
+        @Override public void setComplexity(ProofTreeNode n, String a, String c) {}
+        @Override public void setCertificationState(ProofTreeNode n, CPFCheckResult s) {}
+    };
+
+    private final AproveBuilder.AProVEFactory aproveFactory;
     private Optional<Path> onlineCertificationPath;
     private boolean onlyCertifiableTechniquesIfPossible;
     private Optional<Strategy> strategy;
     private Timeout timeout;
-    private ProofTreeListener proofTreeListener;
+    private ProofTreeListener proofTreeListener = NO_OP_LISTENER;
 
-    public ProofTreeBuilderImpl(AnalyzableProblemInputImpl analyzableProblemInput) {
-        this.analyzableProblemInput = analyzableProblemInput;
+    public ProofTreeBuilderImpl(AproveBuilder.AProVEFactory aproveFactory) {
+        this.aproveFactory = aproveFactory;
     }
 
     @Override
@@ -65,11 +73,11 @@ public class ProofTreeBuilderImpl implements
     @Override
     public ProofTree construct() throws ProofTreeInstantiationException {
         try {
-            return ProofTreeImpl.from(proofTreeListener, AproveBuilder.createAprove(analyzableProblemInput,
-                                                                                    onlineCertificationPath,
-                                                                                    onlyCertifiableTechniquesIfPossible,
-                                                                                    strategy,
-                                                                                    timeout));
+            return ProofTreeImpl.from(proofTreeListener,
+                                      aproveFactory.create(onlineCertificationPath,
+                                                           onlyCertifiableTechniquesIfPossible,
+                                                           strategy,
+                                                           timeout));
         } catch (SourceException | KillAproveException | IllegalArgumentException e) {
             throw new ProofTreeInstantiationException("unable to instantiate the proof tree", e);
         }

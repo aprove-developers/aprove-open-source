@@ -21,7 +21,10 @@ public class AnalyzableProblemInputImpl implements AnalyzableProblemInput {
 
     @Override
     public ProofTreeBuilder newProofTreeBuilder() {
-        return new ProofTreeBuilderImpl(this);
+        return new ProofTreeBuilderImpl(
+            (certPath, certifiable, strategy, timeout) ->
+                AproveBuilder.createAprove(this, certPath, certifiable, strategy, timeout)
+        );
     }
 
     public Input createInput() {

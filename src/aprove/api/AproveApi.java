@@ -14,4 +14,8 @@ public interface AproveApi {
     }
 
     ProblemInput newProblemInput(Path path);
+
+    TrsInputBuilder newTrsInput();
+
+    PtrsInputBuilder newPtrsInput(Goal goal);
 }
