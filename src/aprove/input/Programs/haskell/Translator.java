@@ -389,9 +389,11 @@ public class Translator extends aprove.verification.oldframework.Input.Translato
             this.handlePLException(e);
             this.setState(null);
         }catch (final StrictPositivityException e) {
-//            this.handlePLException(e);
+            final ParseError pe = new ParseError(ParseError.ERROR);
+            pe.setMessage(e.getMessage());
+            this.getErrors().add(pe);
             this.setState(null);
-            throw e;
+//            throw e;
         } catch (final LexerException e) {
             this.handlePLException(e);
             this.setState(null);
