@@ -52,7 +52,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--java", dest="local_java", metavar="PATH",
                         help="Java executable to use with --local (default: java)")
     parser.add_argument("-o", "--outdir", type=Path, help="Output directory for per-file .out files and summary.csv. Optional if --flat-csv is set.")
-    parser.add_argument("-m", "--memory", help="Memory cap for container (e.g. 2g). Disables swap.")
+    parser.add_argument("-m", "--memory", help="Max JVM heap -Xmx (e.g. 6g), applied in both docker and local runs.")
     parser.add_argument("-j", "--max-concurrent-files", dest="max_concurrent_files", type=int,
                         help="CPU/core budget for parallel files; files run = MAX_CONCURRENT_FILES // CORES_PER_FILE "
                              f"(default: {DEFAULTS['MAX_CONCURRENT_FILES']})")
@@ -217,6 +217,7 @@ def run_file(cfg: dict[str, str | Path], file_path: Path, root: Path, outdir: Pa
         "--rm",
         "--cidfile", str(cid_file),
         *mem_flags,
+        *(["-e", f"MEMORY={cfg['MEMORY']}"] if cfg.get("MEMORY") else []),
         "-v",
         f"{cfg['FOLDER']}:{cfg['FOLDER']}",
         cfg["IMAGE"],
@@ -262,6 +263,16 @@ def run_file(cfg: dict[str, str | Path], file_path: Path, root: Path, outdir: Pa
             return file_path, "KILLED", "", elapsed_ms
         if stderr and outdir:
             (outdir / "error.log").open("a", encoding="utf-8").write(f"=== {datetime.datetime.now().isoformat(timespec='seconds')} {clean_file} ===\n{stderr}\n\n")
+        if not output.strip():
+            # No solver output -> crash or OOM-kill (e.g. docker exit 137), not a
+            # timeout (those are KILLED above). Record ERROR, never a blank result.
+            if outdir:
+                (outdir / "error.log").open("a", encoding="utf-8").write(
+                    f"=== {datetime.datetime.now().isoformat(timespec='seconds')} {clean_file} "
+                    f"exited {proc.returncode} with no output (treated as ERROR) ===\n\n")
+                serialize_result.serialize(outdir, root, file_path, "ERROR", False, elapsed_ms)
+            _maybe_append_flat(cfg, file_path, root, "ERROR", elapsed_ms)
+            return file_path, "ERROR", "", elapsed_ms
     except Exception as exc:  # noqa: BLE001
         return file_path, "", f"error invoking docker: {exc}", None
 
@@ -283,6 +294,8 @@ def run_file_local(cfg: dict[str, str | Path], file_path: Path, root: Path, outd
     env["APROVE"] = str(cfg["APROVE_JAR"])
     env["JAVA"] = str(cfg.get("LOCAL_JAVA", "java"))
     env["SOLVER_ROOT"] = str(Path(__file__).resolve().parent)
+    if cfg.get("MEMORY"):
+        env["MEMORY"] = str(cfg["MEMORY"])
     cmd = [
         sys.executable, str(solver),
         f"--timeout={cfg['TIMEOUT']}",
@@ -332,6 +345,16 @@ def run_file_local(cfg: dict[str, str | Path], file_path: Path, root: Path, outd
             return file_path, "KILLED", "", elapsed_ms
         if stderr and outdir:
             (outdir / "error.log").open("a", encoding="utf-8").write(f"=== {datetime.datetime.now().isoformat(timespec='seconds')} {clean_file} ===\n{stderr}\n\n")
+        if not output.strip():
+            # No solver output -> crash or OOM-kill, not a timeout (those are
+            # KILLED above). Record ERROR, never a blank result.
+            if outdir:
+                (outdir / "error.log").open("a", encoding="utf-8").write(
+                    f"=== {datetime.datetime.now().isoformat(timespec='seconds')} {clean_file} "
+                    f"exited {proc.returncode} with no output (treated as ERROR) ===\n\n")
+                serialize_result.serialize(outdir, root, file_path, "ERROR", False, elapsed_ms)
+            _maybe_append_flat(cfg, file_path, root, "ERROR", elapsed_ms)
+            return file_path, "ERROR", "", elapsed_ms
     except Exception as exc:  # noqa: BLE001
         return file_path, "", f"error invoking solver: {exc}", None
 
@@ -553,10 +576,10 @@ def main() -> int:
     else:
         image = require(cfg, "IMAGE")
         cfg["IMAGE"] = image
-        memory = cfg.get("MEMORY")
+        docker_memory = cfg.get("DOCKER_MEMORY")
         mem_flags = []
-        if memory:
-            mem_flags = [f"--memory={memory}", f"--memory-swap={memory}"]
+        if docker_memory:
+            mem_flags = [f"--memory={docker_memory}", f"--memory-swap={docker_memory}"]
         jar_mount = []
         if aprove_jar:
             jar_path = Path(os.path.expandvars(str(aprove_jar))).expanduser().resolve()

@@ -7,8 +7,12 @@ from pathlib import Path
 APROVE = os.environ.get("APROVE", "/opt/bundle/aprove.jar")
 CPF_CONVERTER = os.environ.get("CPF_CONVERTER", "/opt/bundle/cpfconverter/cpf2_to_3.sh")
 JAVA = os.environ.get("JAVA", "java")
-JAVA_PLAIN_OPTS: list[str] = os.environ.get("JAVA_PLAIN_OPTS", "-ea").split()
-JAVA_HEAVY_OPTS: list[str] = os.environ.get("JAVA_HEAVY_OPTS", "-Xmx14G -Xms14G -ea").split()
+# -ea for "enable assertions"
+JAVA_OPTS: list[str] = os.environ.get("JAVA_OPTS", "-ea").split()
+# Max JVM heap (-Xmx) for memory-heavy analyses, taken from the MEMORY config
+# (e.g. "8G"); empty -> JVM default heap.
+_MEMORY: str = os.environ.get("MEMORY", "").strip()
+_HEAP_OPTS: list[str] = [f"-Xmx{_MEMORY}"] if _MEMORY else []
 LOAT_PATH = os.environ.get("LOAT_PATH", "/opt/bundle/bin")
 KOAT2_PATH = os.environ.get("KOAT2_PATH", "/opt/bundle/bin")
 
@@ -54,7 +58,7 @@ def start_plain(
 
     ``extra_args`` are passed verbatim to AProVE before the input file.
     """
-    opts = JAVA_HEAVY_OPTS if heavy else JAVA_PLAIN_OPTS
+    opts = (_HEAP_OPTS + JAVA_OPTS) if heavy else JAVA_OPTS
     t_args = ["-t", str(timeout)] if timeout is not None else []
     cmd = [JAVA, *opts, "-jar", APROVE, "-m", mode, "-p", "plain", *(extra_args or []), *t_args, str(input_file)]
     return subprocess.Popen(
@@ -64,6 +68,23 @@ def start_plain(
         env=_solver_env(env),
         preexec_fn=os.setsid if hasattr(os, "setsid") else None,
     )
+
+
+def _warn_if_killed(returncode: int | None, context: str) -> None:
+    """Log to stderr if AProVE was killed by a signal (e.g. the cgroup OOM-killer).
+
+    A container's OOM-killer sends SIGKILL to the JVM, which surfaces here as a
+    negative returncode (-9) or 137 (128+9). Without this the empty stdout is
+    silently returned and the container still exits 0, so the harness can only
+    tell "no output" but not that it was an out-of-memory kill. benchmark.py copies
+    solver stderr into error.log, so this makes the OOM explicit there.
+    """
+    if returncode is None or 0 <= returncode < 128:
+        return
+    sig = -returncode if returncode < 0 else returncode - 128
+    cause = "OUT OF MEMORY (heap too large for the container)" if sig in (6, 9) else f"killed by signal {sig}"
+    print(f"[solver] AProVE ({context}) produced no result: {cause} [exit={returncode}]. "
+          f"Lower MEMORY/-Xmx or raise the container RAM.", file=sys.stderr, flush=True)
 
 
 def run_plain(
@@ -76,7 +97,9 @@ def run_plain(
     extra_args: list[str] | None = None,
 ) -> str:
     proc = start_plain(input_file, heavy=heavy, mode=mode, timeout=timeout, env=env, extra_args=extra_args)
-    return proc.communicate()[0] or ""
+    out = proc.communicate()[0] or ""
+    _warn_if_killed(proc.returncode, f"-m {mode}")
+    return out
 
 
 def run_cpf_convert(
@@ -87,7 +110,7 @@ def run_cpf_convert(
     extra_args: list[str] | None = None,
 ) -> str:
     t_args = ["-t", str(timeout)] if timeout is not None else []
-    cmd = [JAVA, *JAVA_PLAIN_OPTS, "-jar", APROVE, "-m", mode, "-p", "cpf", "-C", "ceta", *(extra_args or []), *t_args, str(input_file)]
+    cmd = [JAVA, *JAVA_OPTS, "-jar", APROVE, "-m", mode, "-p", "cpf", "-C", "ceta", *(extra_args or []), *t_args, str(input_file)]
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=_solver_env())
     lines = result.stdout.splitlines(keepends=True)
     if not lines:
@@ -119,12 +142,13 @@ def run_complexity(
         tmp = Path(tmpdir) / "input.ari"
         mkinput(tmp, *goal_lines, benchmark=benchmark)
         _print_input(tmp, f"complexity({mode})")
-        base_cmd = [JAVA, *JAVA_HEAVY_OPTS, "-jar", APROVE, "-m", mode, "-w", "4", "-t", str(to)]
+        base_cmd = [JAVA, *_HEAP_OPTS, *JAVA_OPTS, "-jar", APROVE, "-m", mode, "-w", "4", "-t", str(to)]
         if cert:
             result = subprocess.run(
                 [*base_cmd, "-p", "cpf", "-C", "ceta", str(tmp)],
                 stdout=subprocess.PIPE, text=True, env=_solver_env(),
             )
+            _warn_if_killed(result.returncode, f"complexity cert -m {mode}")
             lines = result.stdout.splitlines(keepends=True)
             if not lines:
                 return ""
@@ -137,7 +161,9 @@ def run_complexity(
                 return lines[0] + conv.stdout
             finally:
                 Path(tmp2).unlink(missing_ok=True)
-        return subprocess.run(
+        result = subprocess.run(
             [*base_cmd, "-p", "plain", str(tmp)],
             stdout=subprocess.PIPE, text=True, env=_solver_env(),
-        ).stdout
+        )
+        _warn_if_killed(result.returncode, f"complexity -m {mode}")
+        return result.stdout
