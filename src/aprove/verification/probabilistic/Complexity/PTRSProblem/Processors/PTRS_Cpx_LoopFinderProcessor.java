@@ -1,4 +1,4 @@
-package aprove.verification.probabilistic.Termination.PTRSProblem.AST.Processors;
+package aprove.verification.probabilistic.Complexity.PTRSProblem.Processors;
 
 import java.util.*;
 import java.util.Map.*;
@@ -10,6 +10,7 @@ import aprove.prooftree.Export.Utility.*;
 import aprove.prooftree.Proofs.*;
 import aprove.strategies.Abortions.*;
 import aprove.strategies.Annotations.*;
+import aprove.verification.complexity.TruthValue.*;
 import aprove.verification.dpframework.*;
 import aprove.verification.dpframework.BasicStructures.*;
 import aprove.verification.dpframework.DPProblem.*;
@@ -19,17 +20,18 @@ import aprove.verification.oldframework.BasicStructures.*;
 import aprove.verification.oldframework.Utility.*;
 import aprove.verification.oldframework.Utility.GenericStructures.*;
 import aprove.verification.probabilistic.BasicStructures.*;
+import aprove.verification.probabilistic.Complexity.PTRSProblem.*;
 import aprove.verification.probabilistic.Termination.PTRSProblem.*;
 import immutables.*;
 
 /**
  * Processor that searches for looping terms
- * and then tries to disprove AST by embedding a random walk.
+ * and then tries to disprove SAST by embedding a random walk.
  *
- * @author J-C Kassing & Henri Nagel
+ * @author J-C Kassing & Henri Nagel & Alexander Schlecht
  * @version $Id$
  */
-public class PTRS_AST_LoopFinderProcessor extends PTRS_AST_ProblemProcessor {
+public class PTRS_Cpx_LoopFinderProcessor extends PTRS_Cpx_Processor {
 
     private Arguments args;
     private boolean allcuts;
@@ -40,7 +42,7 @@ public class PTRS_AST_LoopFinderProcessor extends PTRS_AST_ProblemProcessor {
     private final Logger log = Logger.getLogger("aprove.verification.dpframework.DPProblem.Processors.QDPNonLoopProcessor");
 
     @ParamsViaArgumentObject
-    public PTRS_AST_LoopFinderProcessor(final Arguments args) {
+    public PTRS_Cpx_LoopFinderProcessor(final Arguments args) {
         this.args = args;
         this.allcuts = args.allcuts;
     }
@@ -50,7 +52,7 @@ public class PTRS_AST_LoopFinderProcessor extends PTRS_AST_ProblemProcessor {
     // ================================================================================
 
     @Override
-    public boolean isPTRSApplicable(final PTRSProblem ptrs) {
+    public boolean isCpxPTRSApplicable(final PTRS_Cpx_Problem ptrs) {
         return true;
     }
 
@@ -59,7 +61,7 @@ public class PTRS_AST_LoopFinderProcessor extends PTRS_AST_ProblemProcessor {
     // ================================================================================
 
     @Override
-    public Result processPTRSProblem(final PTRSProblem ptrs, final Abortion aborter) throws AbortionException {
+    public Result processCpxPTRS(final PTRS_Cpx_Problem ptrs, final Abortion aborter) throws AbortionException {
 
         //Create SymbolTransitionGraph
         final SymbolTransitionGraph stg = new SymbolTransitionGraph(ptrs.getPR(), ptrs.getSignature());
@@ -270,7 +272,7 @@ public class PTRS_AST_LoopFinderProcessor extends PTRS_AST_ProblemProcessor {
                     //Berechne die Rewritings
                     for (final Pair<NonTerminationProbProofNode, Position> leaf : currentLeaves) {
                         final List<Pair<NonTerminationProbProofNode, Position>> newChildsForSingleLeaf =
-                            computeChildrenForStepIfPossible(ptrs.getPR(), loopTerm, leaf, rewriteSeq.get(i), dps, ptrs);
+                            computeChildrenForStepIfPossible(ptrs.getPR(), loopTerm, leaf, rewriteSeq.get(i), dps, ptrs.getPR());
                         newLeaves.addAll(newChildsForSingleLeaf);
                     }
                     currentLeaves = newLeaves;
@@ -303,7 +305,7 @@ public class PTRS_AST_LoopFinderProcessor extends PTRS_AST_ProblemProcessor {
                 for (final NonTerminationProbProofNode leaf : curLeaves) {
                     //If there is a leaf with probability 1, then we have a loop walk.
                     if (leaf.getValue().y.equals(BigFraction.ONE)) {
-                        return ResultFactory.disproved(new ASTLoopFinderProof(tree, rewriteSeq, tree.isMaxValueAllCounts(), true));
+                        return ResultFactory.provedWithValue(ComplexityYNM.INFINITE, new SASTLoopFinderProof(tree, rewriteSeq, tree.isMaxValueAllCounts()));
                     }
                 }
 
@@ -314,9 +316,9 @@ public class PTRS_AST_LoopFinderProcessor extends PTRS_AST_ProblemProcessor {
                 while (tree.getDepth() <= rewriteStepIterations) {
                     aborter.checkAbortion();
 
-                    //If we can disprove AST, stop
-                    if (tree.getMaxValue().compareTo(BigFraction.ONE) > 0) {
-                        return ResultFactory.disproved(new ASTLoopFinderProof(tree, rewriteSeq, tree.isMaxValueAllCounts(), false));
+                    //If we can disprove PAST (hence SAST), stop
+                    if (tree.getMaxValue().compareTo(BigFraction.ONE) >= 0) {
+                        return ResultFactory.provedWithValue(ComplexityYNM.INFINITE, new SASTLoopFinderProof(tree, rewriteSeq, tree.isMaxValueAllCounts()));
                     }
 
                     //Get all trees we can extend
@@ -326,12 +328,12 @@ public class PTRS_AST_LoopFinderProcessor extends PTRS_AST_ProblemProcessor {
                     //Compute the possible rewrite steps
                     boolean rewriteStepHappened = false;
                     for (final NonTerminationProbProofNode leaf : curLeaves) { //First, we do not rewrite terms with an occurrence of the looping term
-                        rewriteStepHappened |= computeChildren(ptrs, leaf, loopTerm, stg, false);
+                        rewriteStepHappened |= computeChildren(ptrs.getPR(), leaf, loopTerm, stg, false);
                     }
 
                     if (!rewriteStepHappened) { //If nothing changed, then we also allow rewrite steps at terms with an occurrence of the looping term
                         for (final NonTerminationProbProofNode leaf : curLeaves) {
-                            computeChildren(ptrs, leaf, loopTerm, stg, true);
+                            computeChildren(ptrs.getPR(), leaf, loopTerm, stg, true);
                         }
                     }
                 }
@@ -344,14 +346,17 @@ public class PTRS_AST_LoopFinderProcessor extends PTRS_AST_ProblemProcessor {
                 while (true) {
                     for (final NonTerminationProbProofNode tree : trees) {
                         aborter.checkAbortion();
+                        //Get all trees we can extend
                         final List<NonTerminationProbProofNode> currentLeaves = new ArrayList<>();
                         tree.collectLeavesAtLevel(0, tree.getDepth(), currentLeaves);
 
+                        //Compute the possible rewrite steps
                         for (final NonTerminationProbProofNode leaf : currentLeaves) {
-                            computeChildren(ptrs, leaf, tree.getValue().getX(), stg, true);
+                            computeChildren(ptrs.getPR(), leaf, tree.getValue().getX(), stg, true);
                         }
-                        if (tree.getMaxValue().compareTo(BigFraction.ONE) > 0) {
-                            return ResultFactory.disproved(new ASTLoopFinderProof(tree, rewriteSeq, tree.isMaxValueAllCounts(), false));
+                        //If we can disprove PAST (hence SAST), stop
+                        if (tree.getMaxValue().compareTo(BigFraction.ONE) >= 0) {
+                            return ResultFactory.provedWithValue(ComplexityYNM.INFINITE, new SASTLoopFinderProof(tree, rewriteSeq, tree.isMaxValueAllCounts()));
                         }
                     }
                 }
@@ -413,15 +418,14 @@ public class PTRS_AST_LoopFinderProcessor extends PTRS_AST_ProblemProcessor {
      * @param rules the set of probabilistic rules used for computation
      * @param leaf the leaf node for which children are computed
      */
-
     private boolean
-        computeChildren(final PTRSProblem pqtrs,
+        computeChildren(final Set<ProbabilisticRule> R,
             final NonTerminationProbProofNode leaf,
             final TRSTerm loopTerm,
             final SymbolTransitionGraph stg,
             final boolean rewriteIfLoopOccurs) {
         //Get the term and positions
-        final Set<ProbabilisticRule> rules = pqtrs.getPR();
+        final Set<ProbabilisticRule> rules = R;
         final TRSTerm term = leaf.getValue().getX();
         final BigFraction weight = leaf.getValue().getY();
         final Set<Position> positions = new HashSet<>();
@@ -510,13 +514,12 @@ public class PTRS_AST_LoopFinderProcessor extends PTRS_AST_ProblemProcessor {
      * @param leaf the leaf node for which children are computed
      * @param dps
      */
-
     private List<Pair<NonTerminationProbProofNode, Position>> computeChildrenForStepIfPossible(final Set<ProbabilisticRule> rules,
         final TRSTerm loopTerm,
         final Pair<NonTerminationProbProofNode, Position> leaf,
         final Pair<Position, Rule> step,
         final ImmutableTriple<ImmutableSet<Rule>, ImmutableMap<FunctionSymbol, FunctionSymbol>, ImmutableMap<Rule, List<Pair<Position, Rule>>>> dps,
-        final PTRSProblem qtrs) {
+        final Set<ProbabilisticRule> R) {
 
         //Get the term and positions
         final TRSTerm term = leaf.x.getValue().getX();
@@ -547,7 +550,7 @@ public class PTRS_AST_LoopFinderProcessor extends PTRS_AST_ProblemProcessor {
 
         //Get original probabilistic rewrite rule for the step
         ProbabilisticRule origProbRule = null;
-        SearchForProbRule: for (final ProbabilisticRule prule : qtrs.getPR()) {
+        SearchForProbRule: for (final ProbabilisticRule prule : R) {
             for (final Rule pruleAbs : prule.getNonProbabilisticRepresentation()) {
                 if (pruleAbs.getStandardRepresentation().equals(origRule.getStandardRepresentation())) {
                     origProbRule = prule;
@@ -624,14 +627,14 @@ public class PTRS_AST_LoopFinderProcessor extends PTRS_AST_ProblemProcessor {
             }
         } else {
             // Currently, we can only handle orthogonal counting in the case of pattern terms
-            //            if (!onlyOrtho) { // Count All Occurrences
-            //                int maxNM = targetTerm.maxNM(baseLoopTerm, repeatingSubstitution);
-            //                if (maxNM == 0) { // Check if the baseLoopTerm exists as subterm at all
-            //                    return targetTerm.hasPatternOcc(baseLoopTerm, repeatingSubstitution) ? 0 : -1;
-            //                } else {
-            //                    return maxNM;
-            //                }
-            //            } else { // Count Orthogonal
+            //          if (!onlyOrtho) { // Count All Occurrences
+            //              int maxNM = targetTerm.maxNM(baseLoopTerm, repeatingSubstitution);
+            //              if (maxNM == 0) { // Check if the baseLoopTerm exists as subterm at all
+            //                  return targetTerm.hasPatternOcc(baseLoopTerm, repeatingSubstitution) ? 0 : -1;
+            //              } else {
+            //                  return maxNM;
+            //              }
+            //          } else { // Count Orthogonal
             final int maxOM = targetTerm.maxOM(baseLoopTerm, repeatingSubstitution);
             if (maxOM == 0) { // Check if the baseLoopTerm exists as subterm at all
                 return targetTerm.hasPatternOcc(baseLoopTerm, repeatingSubstitution) ? 0 : -1;
@@ -696,7 +699,7 @@ public class PTRS_AST_LoopFinderProcessor extends PTRS_AST_ProblemProcessor {
     // Proof
     // ================================================================================
 
-    public static class ASTLoopFinderProof extends Proof.DefaultProof {
+    public static class SASTLoopFinderProof extends Proof.DefaultProof {
 
         final ImmutableList<Pair<Position, Rule>> rewriteSeq;
 
@@ -704,29 +707,25 @@ public class PTRS_AST_LoopFinderProcessor extends PTRS_AST_ProblemProcessor {
 
         final boolean isMaxValueAllCounts;
 
-        final boolean loopwalk;
-
         int disproveID; // ID of the list element in the nonTerminationProofNode that disproves AST
 
-        public ASTLoopFinderProof(final NonTerminationProbProofNode tree,
+        public SASTLoopFinderProof(final NonTerminationProbProofNode tree,
             final ImmutableList<Pair<Position, Rule>> rewriteSeq,
-            final boolean isMaxValueAllCounts,
-            final boolean loopwalk) {
+            final boolean isMaxValueAllCounts) {
             this.loopTree = tree;
             this.rewriteSeq = rewriteSeq;
             this.isMaxValueAllCounts = isMaxValueAllCounts;
-            this.loopwalk = loopwalk;
 
             for (int i = 0; i < this.loopTree.getValue().z.size(); i++) {
                 if (isMaxValueAllCounts) {
-                    if (this.loopTree.getValue().z.get(i).z.getKey().compareTo(BigFraction.ONE) > 0
-                        || this.loopTree.getValue().z.get(i).z.getValue().compareTo(BigFraction.ONE) > 0) {
+                    if (this.loopTree.getValue().z.get(i).z.getKey().compareTo(BigFraction.ONE) >= 0
+                        || this.loopTree.getValue().z.get(i).z.getValue().compareTo(BigFraction.ONE) >= 0) {
                         this.disproveID = i;
                         break;
                     }
                 } else {
-                    if (this.loopTree.getValue().z.get(i).z.getKey().compareTo(BigFraction.ONE) > 0
-                        || this.loopTree.getValue().z.get(i).z.getValue().compareTo(BigFraction.ONE) > 0) {
+                    if (this.loopTree.getValue().z.get(i).z.getKey().compareTo(BigFraction.ONE) >= 0
+                        || this.loopTree.getValue().z.get(i).z.getValue().compareTo(BigFraction.ONE) >= 0) {
                         this.disproveID = i;
                         break;
                     }
@@ -741,13 +740,11 @@ public class PTRS_AST_LoopFinderProcessor extends PTRS_AST_ProblemProcessor {
             final StringBuilder sb = new StringBuilder();
             final boolean hasPumpingSub = this.loopTree.getValue().getZ().get(this.disproveID).getY() != null;
 
-            sb.append("We are able to disprove AST via [IJCAR'26].")
+            sb.append("We are able to prove an infinite lower bound via [IJCAR'26].")
                 .append(o.linebreak())
                 .append(o.newline());
 
-            if (this.loopwalk) {
-                sb.append("We have a single loop without any branching, so we can embed a loop walk [Thm.5].");
-            } else if (!hasPumpingSub) {
+            if (!hasPumpingSub) {
                 if(loopTree.getValue().getZ().get(this.disproveID).getX().isLinear()) { //Linear term
                     sb.append("We use [Thm.11] and count the linear term:")
                         .append(o.linebreak())
