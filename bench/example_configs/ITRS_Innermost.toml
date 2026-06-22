@@ -6,4 +6,4 @@ TIMEOUT="30"
 #IMAGE=<DOCKER_IMAGE>
 OUTDIR="example_results/ITRS_Innermost"
 APROVE_JAR="../dist/lib/aprove.jar"
-EXTENSION="ari"
+EXTENSION="itrs"
