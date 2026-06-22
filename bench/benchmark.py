@@ -25,7 +25,8 @@ KILL_GRACE = 5  # seconds beyond the jar's own timeout before the script kills t
 
 DEFAULTS: dict[str, str | Path | int | bool] = {
     "TIMEOUT": "30",
-    "JOBS": os.cpu_count() or 1,
+    "MAX_CONCURRENT_FILES": os.cpu_count() or 1,
+    "CORES_PER_FILE": 1,
     "EXTENSION": "ari",
     "RAW_RESULT": False,
     "LOCAL": False,
@@ -52,7 +53,12 @@ def parse_args() -> argparse.Namespace:
                         help="Java executable to use with --local (default: java)")
     parser.add_argument("-o", "--outdir", type=Path, help="Output directory for per-file .out files and summary.csv. Optional if --flat-csv is set.")
     parser.add_argument("-m", "--memory", help="Memory cap for container (e.g. 2g). Disables swap.")
-    parser.add_argument("-j", "--jobs", type=int, help=f"Parallelism (default: {DEFAULTS['JOBS']})")
+    parser.add_argument("-j", "--max-concurrent-files", dest="max_concurrent_files", type=int,
+                        help="CPU/core budget for parallel files; files run = MAX_CONCURRENT_FILES // CORES_PER_FILE "
+                             f"(default: {DEFAULTS['MAX_CONCURRENT_FILES']})")
+    parser.add_argument("--cores-per-file", dest="cores_per_file", type=int,
+                        help="CPU cores each file consumes; files run = MAX_CONCURRENT_FILES // CORES_PER_FILE "
+                             f"(default: {DEFAULTS['CORES_PER_FILE']})")
     parser.add_argument("-x", "--extension", help=f"File extension to search for (without dot) (default: {DEFAULTS['EXTENSION']})")
     parser.add_argument("-r", "--raw-result", action="store_true", default=argparse.SUPPRESS,
                         help="Record the raw first output line in the CSV instead of normalising to YES/NO/MAYBE/KILLED/ERROR. "
@@ -109,7 +115,8 @@ def build_config(cli: argparse.Namespace) -> dict[str, str | Path]:
         ("APROVE_JAR", "aprove_jar"),
         ("OUTDIR", "outdir"),
         ("MEMORY", "memory"),
-        ("JOBS", "jobs"),
+        ("MAX_CONCURRENT_FILES", "max_concurrent_files"),
+        ("CORES_PER_FILE", "cores_per_file"),
         ("EXTENSION", "extension"),
         ("RAW_RESULT", "raw_result"),
         ("FLAT_CSV", "flat_csv"),
@@ -393,7 +400,8 @@ def filter_files(files: list[Path], root: Path, outdir: Path | None, resume: boo
 _DEFAULT_RESULT_LABELS = ["YES", "NO", "MAYBE", "KILLED", "ERROR"]
 
 
-def _query_result_labels(cfg: dict, category: str, local: bool, extra_docker_flags: list[str]) -> list[str]:
+def _query_meta(cfg: dict, category: str, local: bool, extra_docker_flags: list[str]) -> dict:
+    """Ask the handler for its metadata (result labels, solver processes per file)."""
     try:
         if local:
             solver = Path(__file__).resolve().parent / "solver"
@@ -408,10 +416,10 @@ def _query_result_labels(cfg: dict, category: str, local: bool, extra_docker_fla
                 capture_output=True, text=True,
             )
         if result.returncode == 0:
-            return json.loads(result.stdout).get("result_labels", _DEFAULT_RESULT_LABELS)
+            return json.loads(result.stdout)
     except Exception:  # noqa: BLE001
         pass
-    return _DEFAULT_RESULT_LABELS
+    return {}
 
 
 def clean_conflicts(flat_csv: Path) -> int:
@@ -532,8 +540,6 @@ def main() -> int:
         cfg["OUTDIR"] = outdir
     cfg["EXTENSION"] = extension
 
-    jobs = int(cfg.get("JOBS", os.cpu_count() or 1))
-
     if local:
         jar_path = Path(os.path.expandvars(require(cfg, "APROVE_JAR"))).expanduser().resolve()
         if not jar_path.exists():
@@ -566,7 +572,16 @@ def main() -> int:
         cfg["COMMIT_ID"] = get_commit_id(image, Path(str(jar_path_for_version)) if jar_path_for_version else None)
         print(f"Mode: docker (image={image})")
 
-    result_labels = _query_result_labels(cfg, category, local, mem_flags + jar_mount if not local else [])
+    meta = _query_meta(cfg, category, local, mem_flags + jar_mount if not local else [])
+    result_labels = meta.get("result_labels", _DEFAULT_RESULT_LABELS)
+
+    # Number of files run in parallel is always MAX_CONCURRENT_FILES // CORES_PER_FILE
+    cores_per_file = max(1, int(cfg.get("CORES_PER_FILE", 1) or 1))
+    max_concurrent_files = max(1, int(cfg.get("MAX_CONCURRENT_FILES", os.cpu_count() or 1) or 1))
+    jobs = max(1, max_concurrent_files // cores_per_file)
+    if cores_per_file > 1 and jobs != max_concurrent_files:
+        print(f"Category '{category}' uses {cores_per_file} cores per file; "
+              f"reducing parallel files from {max_concurrent_files} to {jobs} to avoid CPU oversubscription.")
 
     print(f"Testing all *.{extension} in {folder}/{subdir}")
     print(f"Under the {category} category using {cfg.get('APROVE_JAR', 'jar from image')}")

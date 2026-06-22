@@ -38,6 +38,34 @@ def _solver_env(env: dict[str, str] | None = None) -> dict[str, str]:
     return base
 
 
+def start_plain(
+    input_file: Path,
+    *,
+    heavy: bool = False,
+    mode: str = "wst",
+    timeout: int | None = None,
+    env: dict[str, str] | None = None,
+    extra_args: list[str] | None = None,
+) -> subprocess.Popen:
+    """Start AProVE in 'plain' mode and return the still-running process.
+
+    The process is placed in its own session (where supported) so callers that
+    run several solvers concurrently can kill a whole group if it overruns.
+
+    ``extra_args`` are passed verbatim to AProVE before the input file.
+    """
+    opts = JAVA_HEAVY_OPTS if heavy else JAVA_PLAIN_OPTS
+    t_args = ["-t", str(timeout)] if timeout is not None else []
+    cmd = [JAVA, *opts, "-jar", APROVE, "-m", mode, "-p", "plain", *(extra_args or []), *t_args, str(input_file)]
+    return subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        text=True,
+        env=_solver_env(env),
+        preexec_fn=os.setsid if hasattr(os, "setsid") else None,
+    )
+
+
 def run_plain(
     input_file: Path,
     *,
@@ -45,11 +73,10 @@ def run_plain(
     mode: str = "wst",
     timeout: int | None = None,
     env: dict[str, str] | None = None,
+    extra_args: list[str] | None = None,
 ) -> str:
-    opts = JAVA_HEAVY_OPTS if heavy else JAVA_PLAIN_OPTS
-    t_args = ["-t", str(timeout)] if timeout is not None else []
-    cmd = [JAVA, *opts, "-jar", APROVE, "-m", mode, "-p", "plain", *t_args, str(input_file)]
-    return subprocess.run(cmd, stdout=subprocess.PIPE, text=True, env=_solver_env(env)).stdout
+    proc = start_plain(input_file, heavy=heavy, mode=mode, timeout=timeout, env=env, extra_args=extra_args)
+    return proc.communicate()[0] or ""
 
 
 def run_cpf_convert(
@@ -57,9 +84,10 @@ def run_cpf_convert(
     *,
     mode: str = "wst",
     timeout: int | None = None,
+    extra_args: list[str] | None = None,
 ) -> str:
     t_args = ["-t", str(timeout)] if timeout is not None else []
-    cmd = [JAVA, *JAVA_PLAIN_OPTS, "-jar", APROVE, "-m", mode, "-p", "cpf", "-C", "ceta", *t_args, str(input_file)]
+    cmd = [JAVA, *JAVA_PLAIN_OPTS, "-jar", APROVE, "-m", mode, "-p", "cpf", "-C", "ceta", *(extra_args or []), *t_args, str(input_file)]
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=_solver_env())
     lines = result.stdout.splitlines(keepends=True)
     if not lines:
