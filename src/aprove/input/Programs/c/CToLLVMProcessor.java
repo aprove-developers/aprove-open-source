@@ -52,12 +52,10 @@ public class CToLLVMProcessor extends Processor.ProcessorSkeleton {
         Translator llvmTranslator = new Translator(cObl.getQuery());
         String llvmFileName = CToLLVMProcessor.getTmpFileName();
         try {
-            Process clang;
-            if (Globals.generateGraphmlWitness) {
-                clang = Runtime.getRuntime().exec("clang " + path + " -S -emit-llvm -g -o " + llvmFileName);
-            } else {
-                clang = Runtime.getRuntime().exec("clang " + path + " -S -emit-llvm -o " + llvmFileName);
-            }
+            // Always compile with debug information (-g): besides being needed for witness generation, the debug
+            // metadata lets us recover the source-level signedness of variables (see LLVMModule#getDebugUnsignedAllocas),
+            // which is otherwise lost when clang lowers e.g. "unsigned int" to "i32".
+            Process clang = Runtime.getRuntime().exec("clang " + path + " -S -emit-llvm -g -o " + llvmFileName);
             clang.waitFor();
             @SuppressWarnings("resource")
             InputStream stderr = clang.getErrorStream();
