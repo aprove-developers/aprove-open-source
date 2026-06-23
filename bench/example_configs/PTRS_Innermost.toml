@@ -6,3 +6,5 @@ TIMEOUT="30"
 OUTDIR="example_results/PTRS_Innermost"
 APROVE_JAR="../dist/lib/aprove.jar"
 EXTENSION="ari"
+RAW_RESULT=true
+CORES_PER_FILE=2

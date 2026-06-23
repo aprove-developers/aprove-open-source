@@ -1,0 +1,9 @@
+FOLDER="../examples"
+SUBDIR="C"
+CATEGORY="C_bv"
+# Uses handlers/C_bv.py: analyzes C with bitvector (bounded) integer semantics (-b --bit-width 64)
+TIMEOUT="30"
+#IMAGE=<DOCKER_IMAGE>
+OUTDIR="example_results/C_bv"
+APROVE_JAR="../dist/lib/aprove.jar"
+EXTENSION="c"
