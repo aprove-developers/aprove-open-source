@@ -9,6 +9,7 @@ import aprove.verification.dpframework.BasicStructures.TRSTerm;
 import aprove.verification.oldframework.BasicStructures.FunctionSymbol;
 import aprove.verification.oldframework.Utility.FreshNameGenerator;
 import aprove.verification.oldframework.Utility.GenericStructures.BiTreeNode;
+import aprove.verification.oldframework.Utility.GenericStructures.Wrapper;
 import immutables.ImmutableCreator;
 import immutables.ImmutableList;
 
@@ -25,14 +26,15 @@ public class TrsTermJoinTree<T extends GeneralizedRule> {
     private final FreshNameGenerator freshNames = new FreshNameGenerator(FreshNameGenerator.VARIABLES);
     private Set<BiTreeNode<RewriteStep>> sLastLayer = new LinkedHashSet<>();
     private Set<BiTreeNode<RewriteStep>> tLastLayer = new LinkedHashSet<>();
-    private ImmutableList<RewriteStep> foundNormalForm;
+    private final Wrapper<ImmutableList<RewriteStep>> sNormalForm = new Wrapper<>(null);
+    private final Wrapper<ImmutableList<RewriteStep>> tNormalForm = new Wrapper<>(null);
 
     public TrsTermJoinTree(Map<FunctionSymbol, ? extends Set<? extends T>> rules, CriticalPairInfo cpInfo, Map<TRSTerm, ImmutableList<RewriteStep>> normalFormCache) {
         this(rules, cpInfo.s(), cpInfo.t(), new BiTreeNode<>(new RewriteStep(cpInfo.divergence(), Position.EPSILON, cpInfo.sRule(), cpInfo.s())), new BiTreeNode<>(new RewriteStep(cpInfo.divergence(), Position.EPSILON, cpInfo.tRule(), cpInfo.t())), normalFormCache, cpInfo);
     }
 
     public TrsTermJoinTree(Map<FunctionSymbol, ? extends Set<? extends T>> rules, TRSTerm s, TRSTerm t) {
-        this(rules, s, t, new BiTreeNode<>(new RewriteStep(null, null, null, s)), new BiTreeNode<>(new RewriteStep(null, null, null, t)), null, null);
+        this(rules, s, t, new BiTreeNode<>(new RewriteStep(null, null, null, s)), new BiTreeNode<>(new RewriteStep(null, null, null, t)), new HashMap<>(), null);
     }
 
     private TrsTermJoinTree(Map<FunctionSymbol, ? extends Set<? extends T>> rules, TRSTerm s, TRSTerm t, BiTreeNode<RewriteStep> sTree, BiTreeNode<RewriteStep> tTree, Map<TRSTerm, ImmutableList<RewriteStep>> normalFormCache, CriticalPairInfo cpInfo) {
@@ -43,6 +45,8 @@ public class TrsTermJoinTree<T extends GeneralizedRule> {
         this.normalFormCache = normalFormCache;
         this.sLastLayer.add(sTree);
         this.tLastLayer.add(tTree);
+        this.sLazySubstitutions.put(s, sTree);
+        this.tLazySubstitutions.put(t, tTree);
         freshNames.lockNames(CollectionUtils.getNames(s.getVariables()));
         freshNames.lockNames(CollectionUtils.getNames(t.getVariables()));
     }
@@ -56,20 +60,16 @@ public class TrsTermJoinTree<T extends GeneralizedRule> {
             ImmutableList<RewriteStep> rightNF = normalFormCache.get(t);
             if (leftNF != null && rightNF != null && leftNF.size() > 1 && rightNF.size() > 1 && !leftNF.getLast().substitutedTerm().equals(rightNF.getLast().substitutedTerm()))
                 return new JoinableResult.WcrCounterExample.NonConfluent(leftNF, rightNF);
-            if (leftNF != null && leftNF.size() > 1)
-                foundNormalForm = leftNF;
-            else if (rightNF != null && rightNF.size() > 1)
-                foundNormalForm = rightNF;
         }
 
         // TODO: actually implement start argument
         for (int i = 0; i < limit; i++) {
-            JoinableResult sResult = buildTreeLayer(s, sLastLayer, sLazySubstitutions, tLazySubstitutions, searchMode, aborter);
+            var sResult = buildTreeLayer(s, sLastLayer, sLazySubstitutions, tLazySubstitutions, sNormalForm, searchMode, aborter);
             if (!(sResult instanceof NewLayer(Set<BiTreeNode<RewriteStep>> sNewLayer)))
                 return sResult;
             sLastLayer = sNewLayer;
 
-            var tResult = buildTreeLayer(t, tLastLayer, tLazySubstitutions, sLazySubstitutions, searchMode, aborter);
+            var tResult = buildTreeLayer(t, tLastLayer, tLazySubstitutions, sLazySubstitutions, tNormalForm, searchMode, aborter);
             if (!(tResult instanceof NewLayer(Set<BiTreeNode<RewriteStep>> tNewLayer)))
                 return tResult;
             tLastLayer = tNewLayer;
@@ -89,6 +89,7 @@ public class TrsTermJoinTree<T extends GeneralizedRule> {
             Set<BiTreeNode<RewriteStep>> lastLayer,
             HashMap<TRSTerm, BiTreeNode<RewriteStep>> lazyFoundOwnSubstitutions,
             HashMap<TRSTerm, BiTreeNode<RewriteStep>> lazyFoundOtherSubstitutions,
+            Wrapper<ImmutableList<RewriteStep>> foundNormalForm,
             CriticalPairs.SearchMode searchMode,
             Abortion aborter) {
 
@@ -105,10 +106,11 @@ public class TrsTermJoinTree<T extends GeneralizedRule> {
 
                 // Check if we previously found a normal form.
                 // If so, the TRS cannot be confluent
-                if (foundNormalForm == null)
-                    foundNormalForm = sequence;
-                else if (!foundNormalForm.getLast().substitutedTerm().equals(lastLayerNode.getValue().substitutedTerm()))
-                    return new JoinableResult.WcrCounterExample.NonConfluent(foundNormalForm, sequence);
+                if (foundNormalForm.x == null) {
+                    foundNormalForm.x = sequence;
+                } else if (!foundNormalForm.x.getLast().substitutedTerm().equals(lastLayerNode.getValue().substitutedTerm())) {
+                    return new JoinableResult.WcrCounterExample.NonConfluent(foundNormalForm.x, sequence);
+                }
             }
 
             // Otherwise, brute force all possible rewrite steps and add them to the tree
