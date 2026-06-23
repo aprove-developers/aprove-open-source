@@ -11,10 +11,20 @@ import aprove.verification.oldframework.Utility.GenericStructures.*;
 
 
 public class NotCRProof extends DefaultProof {
-    private final JoinableResult.NonConfluent nonConfluentResult;
+    private final TRSTerm divergence;
+    private final TRSTerm s;
+    private final TRSTerm t;
 
-    NotCRProof(JoinableResult.NonConfluent nonConfluentResult) {
-        this.nonConfluentResult = nonConfluentResult;
+    public NotCRProof(JoinableResult.NonConfluent nonConfluentResult) {
+        this.divergence = nonConfluentResult.leftNormalForm().getFirst().originalTerm();
+        this.s = nonConfluentResult.leftNormalForm().getLast().substitutedTerm();
+        this.t = nonConfluentResult.rightNormalForm().getLast().substitutedTerm();
+    }
+
+    public NotCRProof(TRSTerm divergence, TRSTerm s, TRSTerm t) {
+        this.divergence = divergence;
+        this.s = s;
+        this.t = t;
     }
 
     @Override
@@ -24,12 +34,12 @@ public class NotCRProof extends DefaultProof {
                 o.export("The following term leads to following normal forms:") +
                 o.cond_linebreak() +
                 o.cond_linebreak() +
-                o.export(nonConfluentResult.leftNormalForm().getFirst().originalTerm()) +
+                o.export(divergence) +
                 o.linebreak() +
                 o.export("->* ") +
-                o.export(nonConfluentResult.leftNormalForm().getLast().substitutedTerm()) +
+                o.export(s) +
                 o.linebreak() +
                 o.export("->* ") +
-                o.export(nonConfluentResult.rightNormalForm().getLast().substitutedTerm());
+                o.export(t);
     }
 }

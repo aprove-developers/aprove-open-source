@@ -1863,3 +1863,4 @@ declare NonConfluenceProcessor = aprove.verification.confluence.NonConfluencePro
 declare ModularComposableTRSProcessor = aprove.verification.confluence.ModularComposableTRSProcessor
 declare DecreasingDiagramsRuleLabellingProcessor = aprove.verification.confluence.DecreasingDiagramsRuleLabellingProcessor
 declare RedundantRulesProcessor = aprove.verification.confluence.RedundantRuleProcessor
+declare InterpretationNonConfluenceProcessor = aprove.verification.confluence.PolyomialInterpretationNonConfluenceProcessor
