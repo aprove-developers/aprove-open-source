@@ -52,7 +52,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--java", dest="local_java", metavar="PATH",
                         help="Java executable to use with --local (default: java)")
     parser.add_argument("-o", "--outdir", type=Path, help="Output directory for per-file .out files and summary.csv. Optional if --flat-csv is set.")
-    parser.add_argument("-m", "--memory", help="Max JVM heap -Xmx (e.g. 6g), applied in both docker and local runs.")
+    parser.add_argument("-m", "--jvm-memory", dest="jvm_memory", help="Max JVM heap -Xmx (e.g. 6g), applied in both docker and local runs.")
     parser.add_argument("-j", "--max-concurrent-files", dest="max_concurrent_files", type=int,
                         help="CPU/core budget for parallel files; files run = MAX_CONCURRENT_FILES // CORES_PER_FILE "
                              f"(default: {DEFAULTS['MAX_CONCURRENT_FILES']})")
@@ -114,7 +114,7 @@ def build_config(cli: argparse.Namespace) -> dict[str, str | Path]:
         ("IMAGE", "image"),
         ("APROVE_JAR", "aprove_jar"),
         ("OUTDIR", "outdir"),
-        ("MEMORY", "memory"),
+        ("JVM_MEMORY", "jvm_memory"),
         ("MAX_CONCURRENT_FILES", "max_concurrent_files"),
         ("CORES_PER_FILE", "cores_per_file"),
         ("EXTENSION", "extension"),
@@ -217,7 +217,7 @@ def run_file(cfg: dict[str, str | Path], file_path: Path, root: Path, outdir: Pa
         "--rm",
         "--cidfile", str(cid_file),
         *mem_flags,
-        *(["-e", f"MEMORY={cfg['MEMORY']}"] if cfg.get("MEMORY") else []),
+        *(["-e", f"JVM_MEMORY={cfg['JVM_MEMORY']}"] if cfg.get("JVM_MEMORY") else []),
         "-v",
         f"{cfg['FOLDER']}:{cfg['FOLDER']}",
         cfg["IMAGE"],
@@ -294,8 +294,8 @@ def run_file_local(cfg: dict[str, str | Path], file_path: Path, root: Path, outd
     env["APROVE"] = str(cfg["APROVE_JAR"])
     env["JAVA"] = str(cfg.get("LOCAL_JAVA", "java"))
     env["SOLVER_ROOT"] = str(Path(__file__).resolve().parent)
-    if cfg.get("MEMORY"):
-        env["MEMORY"] = str(cfg["MEMORY"])
+    if cfg.get("JVM_MEMORY"):
+        env["JVM_MEMORY"] = str(cfg["JVM_MEMORY"])
     cmd = [
         sys.executable, str(solver),
         f"--timeout={cfg['TIMEOUT']}",

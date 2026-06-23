@@ -7,4 +7,4 @@ OUTDIR="example_results/Benchmark_Derivational_Complexity_Innermost_Rewriting"
 APROVE_JAR="../dist/lib/aprove.jar"
 EXTENSION="ari"
 RAW_RESULT=true
-MEMORY="6g"
+JVM_MEMORY="6g"

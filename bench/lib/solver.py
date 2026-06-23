@@ -9,10 +9,10 @@ CPF_CONVERTER = os.environ.get("CPF_CONVERTER", "/opt/bundle/cpfconverter/cpf2_t
 JAVA = os.environ.get("JAVA", "java")
 # -ea for "enable assertions"
 JAVA_OPTS: list[str] = os.environ.get("JAVA_OPTS", "-ea").split()
-# Max JVM heap (-Xmx) for memory-heavy analyses, taken from the MEMORY config
+# Max JVM heap (-Xmx) for memory-heavy analyses, taken from the JVM_MEMORY config
 # (e.g. "8G"); empty -> JVM default heap.
-_MEMORY: str = os.environ.get("MEMORY", "").strip()
-_HEAP_OPTS: list[str] = [f"-Xmx{_MEMORY}"] if _MEMORY else []
+_JVM_MEMORY: str = os.environ.get("JVM_MEMORY", "").strip()
+_HEAP_OPTS: list[str] = [f"-Xmx{_JVM_MEMORY}"] if _JVM_MEMORY else []
 LOAT_PATH = os.environ.get("LOAT_PATH", "/opt/bundle/bin")
 KOAT2_PATH = os.environ.get("KOAT2_PATH", "/opt/bundle/bin")
 
@@ -84,7 +84,7 @@ def _warn_if_killed(returncode: int | None, context: str) -> None:
     sig = -returncode if returncode < 0 else returncode - 128
     cause = "OUT OF MEMORY (heap too large for the container)" if sig in (6, 9) else f"killed by signal {sig}"
     print(f"[solver] AProVE ({context}) produced no result: {cause} [exit={returncode}]. "
-          f"Lower MEMORY/-Xmx or raise the container RAM.", file=sys.stderr, flush=True)
+          f"Lower JVM_MEMORY/-Xmx or raise the container RAM.", file=sys.stderr, flush=True)
 
 
 def run_plain(
