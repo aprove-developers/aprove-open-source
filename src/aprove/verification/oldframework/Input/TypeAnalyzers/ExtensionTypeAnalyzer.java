@@ -45,10 +45,7 @@ public class ExtensionTypeAnalyzer implements TypeAnalyzer {
         }
         try {
             trans.translate(input);
-        } catch (final StrictPositivityException e){
-            throw e;
-        }
-        catch (final Exception e) {
+        } catch (final Exception e) {
             e.printStackTrace();
         }
         final Object prog = trans.getState();
