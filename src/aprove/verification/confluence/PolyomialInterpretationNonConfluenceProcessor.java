@@ -23,6 +23,8 @@ import aprove.verification.oldframework.PropositionalLogic.FormulaFactory;
 import aprove.verification.oldframework.PropositionalLogic.Formulae.NonCountingCircuitFactory;
 import aprove.verification.oldframework.PropositionalLogic.SMTLIB.SMTLIBInt.SMTLIBIntComparison.SMTLIBIntEquals;
 import aprove.verification.oldframework.PropositionalLogic.SMTLIB.SMTLIBInt.SMTLIBIntComparison.SMTLIBIntGE;
+import aprove.verification.oldframework.PropositionalLogic.SMTLIB.SMTLIBInt.SMTLIBIntComparison.SMTLIBIntGT;
+import aprove.verification.oldframework.PropositionalLogic.SMTLIB.SMTLIBInt.SMTLIBIntComparison.SMTLIBIntLE;
 import aprove.verification.oldframework.PropositionalLogic.SMTLIB.SMTLIBInt.SMTLIBIntConstant;
 import aprove.verification.oldframework.PropositionalLogic.SMTLIB.SMTLIBInt.SMTLIBIntFunctions.SMTLIBIntMinus;
 import aprove.verification.oldframework.PropositionalLogic.SMTLIB.SMTLIBInt.SMTLIBIntFunctions.SMTLIBIntMod;
@@ -66,6 +68,10 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
                 continue;
 
             var result = state.disproveByPolynomialInterpretation(candidate.s(), candidate.t(), confTrsProblem.getRules());
+
+            if (result == null)
+                result = state.disproveByOrdering(candidate.s(), candidate.t(), confTrsProblem);
+
             if (result != null)
                 return ResultFactory.disproved(new NotCRProof(candidate.divergence(), candidate.s(), candidate.t()));
 
@@ -85,7 +91,7 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
         public int Modulus = 3;
     }
 
-    private Set<Rule> computeOneStepUnfolding(Set<Rule> rules) {
+    private static Set<Rule> computeOneStepUnfolding(Set<Rule> rules) {
         Set<Rule> result = new HashSet<>(rules);
         for (var rule : rules) {
             result.addAll(forwardUnfold(rule, rules));
@@ -95,7 +101,7 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
         return result;
     }
 
-    private Set<Rule> forwardUnfold(Rule rule, Set<Rule> allRules) {
+    private static Set<Rule> forwardUnfold(Rule rule, Set<Rule> allRules) {
         Set<Rule> res = new HashSet<>();
         TRSTerm lhs = rule.getLeft();
         TRSTerm rhs = rule.getRight();
@@ -117,7 +123,7 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
         return res;
     }
 
-    private Set<Rule> backwardUnfold(Rule rule, Set<Rule> allRules) {
+    private static Set<Rule> backwardUnfold(Rule rule, Set<Rule> allRules) {
         Set<Rule> res = new HashSet<>();
         TRSTerm lhs = rule.getLeft();
         TRSTerm rhs = rule.getRight();
@@ -166,9 +172,6 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
             var sMinusT = SMTLIBIntMinus.create(List.of(sEncoding, tEncoding));
             var sMinusTModK = SMTLIBIntMod.create(List.of(sMinusT, modulus));
             var sEqualsTModKEqualsZero = SMTLIBIntEquals.create(sMinusTModK, zero);
-            /*var sModK = SMTLIBIntMod.create(List.of(sEncoding, modulus));
-            var tModK = SMTLIBIntMod.create(List.of(tEncoding, modulus));
-            var sEqualsTModK = SMTLIBIntEquals.create(sModK, tModK);*/
 
             for (var rule : usableRules) {
                 var lhs = encodeTerm(rule.getLeft());
@@ -177,8 +180,6 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
                 var lhsMinusRhsModK = SMTLIBIntMinus.create(List.of(lhsMinusRhs, modulus));
                 rulesEqualZeroModK.add(SMTLIBIntEquals.create(lhsMinusRhsModK, zero));
             }
-
-
 
             Formula<SMTLIBTheoryAtom> notSEqualsTModK = ff.buildNot(ff.buildTheoryAtom(sEqualsTModKEqualsZero));
             Formula<SMTLIBTheoryAtom> allRulesEqualZeroModK = ff.buildAnd(ff.buildTheoryAtoms(rulesEqualZeroModK));
@@ -195,6 +196,48 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
                 return null;
             }
         }
+
+        private Map<String, String> disproveByOrdering(TRSTerm s, TRSTerm t, ConfTRSProblem confTRSProblem) {
+            var rules = confTRSProblem.getRules();
+            var usableRulesS = computeUsableRules(rules, s);
+            var usableRulesT = computeUsableRules(rules, t);
+
+            List<SMTLIBTheoryAtom> constraints = new LinkedList<>();
+
+            for (var rule : usableRulesS) {
+                var lhs = encodeTerm(rule.getLeft());
+                var rhs = encodeTerm(rule.getRight());
+                var lhsLessEqualsRhs = SMTLIBIntLE.create(lhs, rhs);
+                constraints.add(lhsLessEqualsRhs);
+            }
+
+            for (var rule : usableRulesT) {
+                var lhs = encodeTerm(rule.getLeft());
+                var rhs = encodeTerm(rule.getRight());
+                var lhsGreaterEqualsRhs = SMTLIBIntGE.create(lhs, rhs);
+                constraints.add(lhsGreaterEqualsRhs);
+            }
+
+            var sEncoding = encodeTerm(s);
+            var tEncoding = encodeTerm(t);
+            var sGreaterThanT = SMTLIBIntGT.create(sEncoding, tEncoding);
+            constraints.add(sGreaterThanT);
+
+            var conjunction = ff.buildAnd(ff.buildTheoryAtoms(constraints));
+
+            try {
+                var result = smtEngine.solve(List.of(conjunction), SMTEngine.SMTLogic.QF_LIA, aborter);
+                if (result.x == YNM.YES)
+                    return result.y;
+                return null;
+            } catch (WrongLogicException e) {
+                return null;
+            }
+        }
+
+        /*private Map<String, String> disproveByRecursivePathOrdering(TRSTerm s, TRSTerm t, Set<Rule> rules) {
+
+        }*/
 
         private SMTLIBIntValue encodeTerm(TRSTerm term) {
             if (term instanceof TRSVariable variable)
