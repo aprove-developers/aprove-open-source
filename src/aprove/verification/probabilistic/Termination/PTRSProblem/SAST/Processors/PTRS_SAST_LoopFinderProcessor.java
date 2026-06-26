@@ -62,7 +62,7 @@ public class PTRS_SAST_LoopFinderProcessor extends PTRS_SAST_ProblemProcessor {
     public Result processPTRSProblem(final PTRSProblem ptrs, final Abortion aborter) throws AbortionException {
 
         //Create SymbolTransitionGraph
-        final SymbolTransitionGraph stg = new SymbolTransitionGraph(ptrs);
+        final SymbolTransitionGraph stg = new SymbolTransitionGraph(ptrs.getPR(), ptrs.getSignature());
 
         //List for all already found trees
         final List<NonTerminationProbProofNode> trees = new ArrayList<>();

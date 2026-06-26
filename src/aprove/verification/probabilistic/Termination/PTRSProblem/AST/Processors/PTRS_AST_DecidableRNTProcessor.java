@@ -124,8 +124,8 @@ public class PTRS_AST_DecidableRNTProcessor extends PTRS_AST_ProblemProcessor {
                     TRSTerm subterm = sub.y;
                     for (ProbabilisticRule rule2 : P.getPR()) {
                         TRSTerm lhs = rule2.getLeft();
-                        // lhs has variables, subterm is ground, match lhs onto subterm
-                        TRSSubstitution sigma = subterm.getMatcher(lhs);
+                        // lhs has variables, subterm is ground, match lhs onto subterm.
+                        TRSSubstitution sigma = lhs.getMatcher(subterm);
                         if (sigma != null) {
                             iLhs.add(subterm);
                             break; // non-overlapping: at most one rule matches
@@ -265,14 +265,17 @@ public class PTRS_AST_DecidableRNTProcessor extends PTRS_AST_ProblemProcessor {
                     tmp.put(s, coeff.getExponent(s));
                     continue;
                 }
-                val = val.divide(names.get(s).getDenominator());
-                val = val.multiply(names.get(s).getNumerator());
+                int e = coeff.getExponent(s);
+                val = val.divide(names.get(s).getDenominator().pow(e));
+                val = val.multiply(names.get(s).getNumerator().pow(e));
             }
             IndefinitePart newX = IndefinitePart.create(tmp);
-            if (!res.keySet().contains(newX)) {
-                res.put(newX, val);
+            BigInteger newVal = res.containsKey(newX) ? res.get(newX).add(val) : val;
+            // SimplePolynomial forbids zero-valued monomials -> drop coefficients that vanish
+            if (newVal.signum() == 0) {
+                res.remove(newX);
             } else {
-                res.put(newX,res.get(newX).add(val));
+                res.put(newX, newVal);
             }
         }
         return SimplePolynomial.create(res);
@@ -385,12 +388,10 @@ public class PTRS_AST_DecidableRNTProcessor extends PTRS_AST_ProblemProcessor {
         formulae.add(factory.buildTheoryAtom(a1));
         formulae.add(factory.buildTheoryAtom(a2));
         SMTLIBEngine solver = new SMTLIBEngine();
-        YNM answer;
-        try {
-            answer = solver.satisfiable(formulae, SMTEngine.SMTLogic.QF_RA, aborter);
-        } catch (final WrongLogicException e) {
-            answer = YNM.MAYBE;
-        }
+        // The characteristic-polynomial root query is nonlinear (degree = component size),
+        // so it must be solved under QF_NRA. We only need the SAT/UNSAT verdict: read it via solve(...).x
+        Pair<YNM, Map<String, String>> result = solver.solve(formulae, SMTEngine.SMTLogic.QF_NRA, aborter);
+        YNM answer = result == null ? YNM.MAYBE : result.x;
         switch (answer) {
             case YES -> {
                 return YNM.NO;

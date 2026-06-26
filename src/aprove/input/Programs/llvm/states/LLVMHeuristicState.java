@@ -330,6 +330,7 @@ public class LLVMHeuristicState extends LLVMAbstractState {
                     ImmutableCreator.create(rels),
                     this.getModule().getLiveVariables(),
                     this.getModule().getReturnConditions(),
+                    this.getModule().getDebugUnsignedAllocas(),
                     this.getModule().getPointerSize()
                 ),
                 this.getAllocatedInCurrentFunctionFrameIndices(),

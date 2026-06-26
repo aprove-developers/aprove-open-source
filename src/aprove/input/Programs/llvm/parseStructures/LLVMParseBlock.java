@@ -30,6 +30,10 @@ public class LLVMParseBlock {
         // convert instructions
         final List<LLVMInstruction> instrList = new ArrayList<LLVMInstruction>();
         for (LLVMParseInstruction instruction : this.instructions) {
+            // debug intrinsics (llvm.dbg.*) are not analyzed - their information is extracted separately
+            if (instruction.isDbgIntrinsic()) {
+                continue;
+            }
             instrList.add(instruction.convertToBasicInstruction(typeDefs, pointerSize));
         }
         return new LLVMBasicBlock(this.blockName, ImmutableCreator.create(instrList));

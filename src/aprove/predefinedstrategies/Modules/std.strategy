@@ -1834,6 +1834,7 @@ declare ADP_SAST_ProbabilityRemovalProcessor = aprove.verification.probabilistic
 
 
 #Complexity PTRS Processors
+declare PTRS_Cpx_LoopFinder = aprove.verification.probabilistic.Complexity.PTRSProblem.Processors.PTRS_Cpx_LoopFinderProcessor
 declare PTRS_Cpx_DirectPOLO = aprove.verification.probabilistic.Complexity.PTRSProblem.Processors.PTRS_Cpx_DirectPoloProcessor
 declare PTRS_Cpx_ToPQTRS = aprove.verification.probabilistic.Complexity.PTRSProblem.Processors.PTRS_Cpx_ToPQTRSProcessor
 declare PTRS_Cpx_ToInnermost = aprove.verification.probabilistic.Complexity.PTRSProblem.Processors.PTRS_Cpx_ToInnermostProcessor

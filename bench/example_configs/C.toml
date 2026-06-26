@@ -1,7 +1,7 @@
 FOLDER="../examples"
 SUBDIR="C"
-CATEGORY="default"
-# No handlers/default.sh; solver will fall back to __default__.sh
+CATEGORY="C"
+# No handlers/C.sh; solver will fall back to __default__.sh
 TIMEOUT="30"
 #IMAGE=<DOCKER_IMAGE>
 OUTDIR="example_results/C"

@@ -11,6 +11,7 @@ import aprove.input.Programs.llvm.internalStructures.dataType.*;
 import aprove.input.Programs.llvm.internalStructures.expressions.*;
 import aprove.input.Programs.llvm.internalStructures.expressions.relations.*;
 import aprove.input.Programs.llvm.internalStructures.intersecting.*;
+import aprove.input.Programs.llvm.internalStructures.literals.*;
 import aprove.input.Programs.llvm.internalStructures.memory.*;
 import aprove.input.Programs.llvm.internalStructures.module.*;
 import aprove.input.Programs.llvm.problems.*;
@@ -977,6 +978,22 @@ public class LLVMAbstractStateFactory {
      * @return The original state where the specified global variable has been added including its allocation as the
      *         last allocation in the allocation list.
      */
+    /**
+     * @param lit An initial value of a global variable (may be <code>null</code>).
+     * @return True iff <code>lit</code> is a constant scalar literal whose value can be represented as a single simple
+     *         heap entry (i.e. {@link LLVMAbstractState#getSimpleTermForLiteral(LLVMLiteral)} returns its value without
+     *         relying on a program variable). Aggregate initializers (arrays, structs, vectors, strings), symbolic
+     *         references and <code>undef</code> are intentionally excluded: for those we keep the (sound)
+     *         over-approximation of an unconstrained initial value.
+     */
+    private static boolean isInitializableScalarLiteral(LLVMLiteral lit) {
+        return lit instanceof LLVMRegularIntLiteral
+            || lit instanceof LLVMBigIntLiteral
+            || lit instanceof LLVMNullLiteral
+            || lit instanceof LLVMFloatLiteral
+            || lit instanceof LLVMDoubleLiteral;
+    }
+
     protected LLVMAbstractState initialKnowledgeForGlobalVariable(
         LLVMAbstractState state,
         String name,
@@ -1005,6 +1022,25 @@ public class LLVMAbstractStateFactory {
                 newRels,
                 aborter
             );
+        // initialKnowledgeForPointer maps the global's pointer to a fresh (unconstrained) value in the heap, i.e. it
+        // treats the global as uninitialized. If the global has a representable scalar initial value, overwrite that
+        // heap entry with the actual initial value so that loads from the global see it (e.g. "@zero initVal: 0").
+        if (LLVMAbstractStateFactory.isInitializableScalarLiteral(variable.getInitValue())) {
+            final boolean unsigned;
+            if (res.getStrategyParamters().useBoundedIntegers) {
+                unsigned = res.getModule().getAddressesToUnsignedBitvectorVariables().contains(name);
+            } else {
+                unsigned = false;
+            }
+            res =
+                res.setSimpleHeapEntry(
+                    pointer,
+                    type.getTargetType(),
+                    unsigned,
+                    res.getSimpleTermForLiteral(variable.getInitValue()),
+                    aborter
+                );
+        }
         if (state.getModule().getAllPositions().size() < Globals.INSTRUCTION_COUNT_THRESHOLD) {
             // allocated area contains exactly the global variable
             LLVMRelation globalVarRel = relationFactory.equalTo(

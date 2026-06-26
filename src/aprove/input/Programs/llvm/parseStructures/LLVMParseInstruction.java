@@ -1111,6 +1111,24 @@ public class LLVMParseInstruction {
     private final List<Object> objects;
 
     /**
+     * True iff this instruction is a call to a debug intrinsic (llvm.dbg.*). Such instructions are not analyzed and are
+     * dropped when converting to the basic block structure.
+     */
+    private boolean dbgIntrinsic = false;
+
+    /**
+     * For a llvm.dbg.declare intrinsic: the pointer (alloca) that the declared source variable lives in. May be
+     * <code>null</code>.
+     */
+    private LLVMParseLiteral dbgDeclarePointer = null;
+
+    /**
+     * For a llvm.dbg.declare intrinsic: the index of the DILocalVariable debug metadata node bound to the pointer, or
+     * -1 if none.
+     */
+    private int dbgDeclareLocalVarIndex = -1;
+
+    /**
      * Creates an instruction of thhe specified type with no parameters.
      * @param instrTypeParam The type of the instruction.
      */
@@ -1125,6 +1143,42 @@ public class LLVMParseInstruction {
      */
     public void addParam(Object param) {
         this.objects.add(param);
+    }
+
+    /**
+     * @return True iff this instruction is a call to a debug intrinsic (llvm.dbg.*).
+     */
+    public boolean isDbgIntrinsic() {
+        return this.dbgIntrinsic;
+    }
+
+    public void setDbgIntrinsic(boolean dbgIntrinsic) {
+        this.dbgIntrinsic = dbgIntrinsic;
+    }
+
+    /**
+     * Records the binding of a llvm.dbg.declare intrinsic.
+     * @param pointer The pointer (alloca) the source variable lives in.
+     * @param localVarIndex The index of the bound DILocalVariable debug metadata node.
+     */
+    public void setDbgDeclare(LLVMParseLiteral pointer, int localVarIndex) {
+        this.dbgDeclarePointer = pointer;
+        this.dbgDeclareLocalVarIndex = localVarIndex;
+    }
+
+    /**
+     * @return For a llvm.dbg.declare intrinsic: the pointer (alloca) the declared source variable lives in, or
+     *         <code>null</code>.
+     */
+    public LLVMParseLiteral getDbgDeclarePointer() {
+        return this.dbgDeclarePointer;
+    }
+
+    /**
+     * @return For a llvm.dbg.declare intrinsic: the index of the bound DILocalVariable debug metadata node, or -1.
+     */
+    public int getDbgDeclareLocalVarIndex() {
+        return this.dbgDeclareLocalVarIndex;
     }
 
     /**
