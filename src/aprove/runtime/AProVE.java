@@ -4,10 +4,12 @@ import java.util.*;
 import java.util.logging.*;
 
 import aprove.*;
+import aprove.input.Programs.haskell.PositivityChecker;
 import aprove.input.Utility.*;
 import aprove.prooftree.Obligations.*;
 import aprove.strategies.ExecutableStrategies.*;
 import aprove.strategies.Parameters.*;
+import aprove.verification.dpframework.HaskellProblem.HaskellProgram;
 import aprove.verification.dpframework.JBCProblem.*;
 import aprove.verification.oldframework.Input.*;
 import aprove.verification.oldframework.Input.Annotators.*;
@@ -102,7 +104,7 @@ public class AProVE implements ProveRunner {
     public ObligationNode getRoot() {
         return this.root;
     }
-    
+
     public TypedInput getTypedInput() {
         return this.typedInput;
     }
@@ -179,6 +181,10 @@ public class AProVE implements ProveRunner {
         Main.firstObligation = false;
         this.root = rootAndPositions.x;
         this.positions = rootAndPositions.y;
+        if (this.getTypedInput().getLanguage().equals(Language.HASKELL)) {
+            final PositivityChecker checker = new PositivityChecker();
+            checker.checkForIOResult(((HaskellProgram) this.typedInput.getInput()).getModules());
+        }
     }
 
 }

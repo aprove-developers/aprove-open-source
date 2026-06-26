@@ -21,16 +21,38 @@ public class GraphBuilder {
 
     private Map<String, Integer> paramIndex;
 
+    private Map<String, TyConsEntity> preludeTyCons;
+
+    // should be read directly from Prelude
+    private Set<String> preludeNames = new LinkedHashSet<>(Set.of(
+            "IO", "Either", "IOResult", "FilePath", "Integer", "ReadS", "Obj", "ShowS",
+            "Int", "Rational", "WHNF", "Maybe", "IOError", "Nat", "Float", "IOFinished", "HugsException",
+            "IOErrorKind", "Char", "Ordering", "Double", "String", "AET", "Ratio"
+    ));
+
     public GraphBuilder() {
         this.datatypeNames = new HashSet<>();
         this.graph = new OccurrenceGraph();
+    }
+
+    public OccurrenceGraph buildFromDataDecl(List<DataDecl> dataDecls, List<SynTypeDecl>  synTypeDecls, Map<String, TyConsEntity> preludeTyConsMap) {
+        this.preludeTyCons = preludeTyConsMap;
+        dataDecls.forEach(d -> datatypeNames.add(d.getDefType().getToken().getText()));
+        synTypeDecls.forEach(d -> datatypeNames.add(d.getDefType().getToken().getText()));
+        synTypeDecls.forEach(this::processSynTypes);
+        for (DataDecl d : dataDecls) {
+            processDataDecl(d, d.getDefType().getToken().getText());
+        }
+        return graph;
     }
 
     public OccurrenceGraph buildFromDataDecl(List<DataDecl> dataDecls, List<SynTypeDecl>  synTypeDecls) {
         dataDecls.forEach(d -> datatypeNames.add(d.getDefType().getToken().getText()));
         synTypeDecls.forEach(d -> datatypeNames.add(d.getDefType().getToken().getText()));
         synTypeDecls.forEach(this::processSynTypes);
-        dataDecls.forEach(this::processDataDecl);
+        for (DataDecl d : dataDecls) {
+            processDataDecl(d, d.getDefType().getToken().getText());
+        }
         return graph;
     }
 
@@ -40,7 +62,7 @@ public class GraphBuilder {
         }
 
         for (TyConsEntity entity : types) {
-            processDataDecl((DataDecl) entity.getValue());
+            processDataDecl((DataDecl) entity.getValue(), entity.getName());
         }
 
         return graph;
@@ -60,10 +82,8 @@ public class GraphBuilder {
                     .forEach(index -> paramIndex.put(((Var) vars.get(index)).getSymbol().toString(), index));
         }
 
-        graph.addEdge(
-                new OccurrenceGraph.DefNode(currentDef),
-                new OccurrenceGraph.DefNode(currentDef),
-                Occurrence.UNUSED
+        graph.addNode(
+                new OccurrenceGraph.DefNode(currentDef)
         );
 
         walkType(
@@ -74,26 +94,24 @@ public class GraphBuilder {
 
     }
 
-    private void processDataDecl(DataDecl dd) {
+    private void processDataDecl(DataDecl dd, String name) {
         //reset
-        currentDef = dd.getDefType().getToken().getText();
+        currentDef = name;
         paramIndex = new LinkedHashMap<>();
 
         if (dd.getDefType() instanceof Apply apply) {
 
             //collect vars from data declaration
             List<HaskellObject> vars = new ArrayList<>();
-            var _unusedVar = flattenApp(apply, vars);
+            var _ = flattenApp(apply, vars);
 
             //add vars to paramIndex with innermost index 0
             IntStream.range(0, vars.size())
                     .forEach(index -> paramIndex.put(((Var) vars.get(index)).getSymbol().toString(), index));
         }
         //create node
-        graph.addEdge(
-                new OccurrenceGraph.DefNode(currentDef),
-                new OccurrenceGraph.DefNode(currentDef),
-                Occurrence.UNUSED
+        graph.addNode(
+                new OccurrenceGraph.DefNode(currentDef)
         );
 
         for (DataCon ctor : dd.getDataCons()) {
@@ -121,8 +139,6 @@ public class GraphBuilder {
         for (int i = reversed.size() - 1; i >= 0; i--) {
             args.add(reversed.get(i));
         }
-
-        // System.out.println(args);
 
         return current;
     }
@@ -159,6 +175,13 @@ public class GraphBuilder {
                     target,
                     pol
             );
+        } else if (preludeTyCons != null && preludeTyCons.containsKey(name)) {
+            TyConsEntity entity = preludeTyCons.get(name);
+            if (entity.getValue() instanceof SynTypeDecl synTypeDecl) {
+                walkType(synTypeDecl.getType(), pol, target);
+            } else if (entity.getValue() instanceof DataDecl dataDecl) {
+                processDataDecl(dataDecl, name);
+            }
         }
     }
 
@@ -182,8 +205,6 @@ public class GraphBuilder {
         if (head instanceof Cons cons) {
 
             String name = cons.getSymbol().toString();
-
-            // System.out.println("Assessing "+ apply + ", name: " + name);
 
             //check if arrow function
             if (name.equals("->")) {
@@ -215,7 +236,7 @@ public class GraphBuilder {
     }
 
     private Occurrence argPolarity(String name) {
-        if (datatypeNames.contains(name)) {
+        if (datatypeNames.contains(name) || preludeNames.contains(name)) {
 //            return Occurrence.GUARD_POS;
             return Occurrence.STRICT_POS;
         }
@@ -225,7 +246,7 @@ public class GraphBuilder {
     private OccurrenceGraph.Node argTarget(
             String name, int argIndex, OccurrenceGraph.Node currentTarget
     ) {
-        if (datatypeNames.contains(name)) {
+        if (datatypeNames.contains(name) || preludeNames.contains(name)) {
             return new OccurrenceGraph.ArgNode(name, argIndex);
         }
         return currentTarget;

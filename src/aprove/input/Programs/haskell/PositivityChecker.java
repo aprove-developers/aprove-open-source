@@ -1,19 +1,17 @@
 package aprove.input.Programs.haskell;
 
-import aprove.input.Generated.haskell.node.Switch;
-import aprove.input.Generated.haskell.node.Token;
-import aprove.input.Generated.haskell.parser.ParserException;
-import aprove.input.Utility.ParseError;
+import aprove.verification.oldframework.Haskell.BasicTerms.Apply;
+import aprove.verification.oldframework.Haskell.BasicTerms.Cons;
 import aprove.verification.oldframework.Haskell.Declarations.DataDecl;
 import aprove.verification.oldframework.Haskell.Declarations.HaskellDecl;
 import aprove.verification.oldframework.Haskell.Declarations.SynTypeDecl;
+import aprove.verification.oldframework.Haskell.Expressions.HaskellExp;
+import aprove.verification.oldframework.Haskell.HaskellObject;
+import aprove.verification.oldframework.Haskell.Modules.*;
 import aprove.verification.oldframework.Haskell.Modules.Module;
-import aprove.verification.oldframework.Haskell.Modules.Modules;
+import aprove.verification.oldframework.Utility.GenericStructures.Pair;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class PositivityChecker {
 
@@ -29,6 +27,14 @@ public class PositivityChecker {
         for (var module : modMap.values()) {
             decls.addAll(module.getDecls());
         }
+// may be helpful to have the prelude types in the graph, but not for now not consistent (e.g. Nat is not exported therefore Int not handled correctly)
+//        final Set<HaskellEntity> entities = mods.getPrelude().getExpEntities();
+//        final HashMap<String, TyConsEntity> preludeTyCons = new HashMap<>();
+//        for (HaskellEntity entity : entities) {
+//            if (entity instanceof TyConsEntity tyConsEntity && !Objects.equals(entity.getName(), "->")) {
+//                preludeTyCons.put(tyConsEntity.getName(), tyConsEntity);
+//            }
+//        }
 
         final List<DataDecl> dataDecl = decls.stream()
                 .filter(decl -> decl instanceof DataDecl)
@@ -40,8 +46,10 @@ public class PositivityChecker {
                 .map(decl -> (SynTypeDecl) decl)
                 .toList();
 
+
         GraphBuilder builder = new GraphBuilder();
         OccurrenceGraph graph = builder.buildFromDataDecl(dataDecl, synTypeDecls);
+//        OccurrenceGraph graph = builder.buildFromDataDecl(dataDecl, synTypeDecls, preludeTyCons);
 
         List<Violation> violations = new ArrayList<>();
         Map<String, Occurrence> selfLoops = new LinkedHashMap<>();
@@ -70,12 +78,33 @@ public class PositivityChecker {
         }
     }
 
+    private void walkType(HaskellObject type){
+        if (type instanceof Cons cons && cons.getSymbol().toString().equals("IOResult") && cons.getSymbol().getEntity().getModule().equals("Prelude")) throw new StrictPositivityException("IOResult type is not strictly positive");
+        else if (type instanceof Apply apply) {
+            walkType(apply.getFunction());
+            walkType(apply.getArgument());
+        }
+    }
+
+    public void checkForIOResult(Modules mods) {
+        Module main = mods.getMainModule();
+        List<Pair<HaskellObject, HaskellExp>> startTerms = mods.getStartTerms();
+        for (Pair<HaskellObject, HaskellExp> startTerm : startTerms) {
+            walkType(startTerm.getValue().getTypeTerm());
+        }
+        for (HaskellEntity entity : main.getExpEntities()) {
+            if (entity.getName().equals("IOResult")) continue; // then it is user defined and was checked previously
+            else if (entity instanceof ConsEntity consEntity) walkType(consEntity.getType());
+            else if (entity instanceof VarEntity varEntity) walkType(varEntity.getValue().getTypeTerm());
+        }
+    }
+
     public void debug(Modules mods) {
         System.out.println("=== Positivity check ===");
         Result result = computeResult(mods);
 
         System.out.println("Occurrence graph:");
-        System.out.println(result.graph.toStringWithoutUnused());
+//        System.out.println(result.graph.toStringWithoutUnused());
         System.out.println(result.graph);
 
         System.out.println("Self-loop polarities:");

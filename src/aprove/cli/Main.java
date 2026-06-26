@@ -160,11 +160,6 @@ public class Main {
             return root.getTruthValue();
         } catch (KillAproveException e) {
             throw e;
-        } catch (final StrictPositivityException e) {
-            final TruthValue res = MAYBE;
-            System.out.println(e.getMessage());
-            this.printResult(res, options.mode);
-            return res;
         } catch (final Exception e) {
             if (options.debug || Globals.aproveVersion == AproveVersion.DEVELOPER_VERSION) {
                 e.printStackTrace();
