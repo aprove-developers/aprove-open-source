@@ -347,7 +347,7 @@ fragment SYMBOL_REST
 fragment LETTER : 'a'..'z' | 'A'..'Z';
 fragment DIGIT  : '0'..'9';
 fragment SPECIAL : '~' | '!' | '@' | '$' | '%' | '^' | '&' | '*' | '_' | '-' |
-                   '+' | '=' | '<' | '>' | '.' | '?' | '/';
+                   '+' | '=' | '<' | '>' | '.' | '?' | '/' | '\'';
 
 QUOTED_SYMBOL
     : '|' QUOTED_CHAR+ '|'
