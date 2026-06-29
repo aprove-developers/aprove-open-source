@@ -2140,31 +2140,32 @@ conf_atomic_trs = First(
         )
 
 conf_trs_comp = First(
-            conf_trs_preprocess : ConfOrthogonalProcessor,
-            conf_trs_preprocess : StrongConfluenceProcessor,
+            ConfOrthogonalProcessor,
+            StrongConfluenceProcessor,
             conf_atomic_trs
         )
 
 conf_trs_mop = First(
-            conf_trs_preprocess : ConfOrthogonalProcessor,
-            conf_trs_preprocess : StrongConfluenceProcessor,
-            conf_trs_preprocess : ModularComposableTRSProcessor : conf_trs_comp,
+            ConfOrthogonalProcessor,
+            StrongConfluenceProcessor,
+            ModularComposableTRSProcessor : conf_trs_comp,
             conf_atomic_trs
         )
 
 conf_trs_toyama = First(
-            conf_trs_preprocess : ConfOrthogonalProcessor,
-            conf_trs_preprocess : StrongConfluenceProcessor,
-            conf_trs_preprocess : ModularConstructorSharingProcessor : conf_trs_mop,
+            ConfOrthogonalProcessor,
+            StrongConfluenceProcessor,
+            ModularConstructorSharingProcessor : conf_trs_mop,
             ModularComposableTRSProcessor : conf_trs_comp,
             conf_atomic_trs
         )
 
 conf_trs = First(
-            conf_trs_preprocess : ConfOrthogonalProcessor,
-            conf_trs_preprocess : StrongConfluenceProcessor,
-            conf_trs_preprocess : DisjointUnionProcessor : conf_trs_toyama,
-            conf_trs_preprocess : ModularConstructorSharingProcessor : conf_trs_mop,
-            conf_trs_preprocess : ModularComposableTRSProcessor : conf_trs_comp,
+            #StronglyQuasiLinearHierarchicallyDecreasingnessProcessor
+            ConfOrthogonalProcessor,
+            StrongConfluenceProcessor,
+            DisjointUnionProcessor : conf_trs_toyama,
+            ModularConstructorSharingProcessor : conf_trs_mop,
+            ModularComposableTRSProcessor : conf_trs_comp,
             conf_atomic_trs
         )

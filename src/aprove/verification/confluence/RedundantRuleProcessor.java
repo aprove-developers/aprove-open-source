@@ -111,7 +111,7 @@ public class RedundantRuleProcessor implements Processor {
         // longer reach its right side, turning a non-confluent TRS into a confluent one.
         rules.removeIf(rule -> {
             incrementalRuleMap.removeRule(rule);
-            var joinTree = new TrsTermJoinTree<>(incrementalRuleMap.getRuleMap(), rule.getLeft(), rule.getRight());
+            var joinTree = new TrsTermJoinTree(incrementalRuleMap.getRuleMap(), rule.getLeft(), rule.getRight());
             var result = joinTree.areTermsReachable(REACHABILITY_LIMIT, aborter);
             var doRemove = result instanceof JoinableResult.Joinable;
             if (!doRemove)

@@ -2,10 +2,7 @@ package aprove.verification.confluence;
 
 import aprove.strategies.Abortions.Abortion;
 import aprove.verification.confluence.Utility.CriticalPairInfo;
-import aprove.verification.dpframework.BasicStructures.CollectionUtils;
-import aprove.verification.dpframework.BasicStructures.GeneralizedRule;
-import aprove.verification.dpframework.BasicStructures.Position;
-import aprove.verification.dpframework.BasicStructures.TRSTerm;
+import aprove.verification.dpframework.BasicStructures.*;
 import aprove.verification.oldframework.BasicStructures.FunctionSymbol;
 import aprove.verification.oldframework.Utility.FreshNameGenerator;
 import aprove.verification.oldframework.Utility.GenericStructures.BiTreeNode;
@@ -15,8 +12,8 @@ import immutables.ImmutableList;
 
 import java.util.*;
 
-public class TrsTermJoinTree<T extends GeneralizedRule> {
-    private final Map<FunctionSymbol, ? extends Set<? extends T>> rules;
+public class TrsTermJoinTree {
+    private final Map<FunctionSymbol, ? extends Set<Rule>> rules;
     private final CriticalPairInfo cpInfo;
     private final TRSTerm s;
     private final TRSTerm t;
@@ -29,15 +26,15 @@ public class TrsTermJoinTree<T extends GeneralizedRule> {
     private final Wrapper<ImmutableList<RewriteStep>> sNormalForm = new Wrapper<>(null);
     private final Wrapper<ImmutableList<RewriteStep>> tNormalForm = new Wrapper<>(null);
 
-    public TrsTermJoinTree(Map<FunctionSymbol, ? extends Set<? extends T>> rules, CriticalPairInfo cpInfo, Map<TRSTerm, ImmutableList<RewriteStep>> normalFormCache) {
+    public TrsTermJoinTree(Map<FunctionSymbol, ? extends Set<Rule>> rules, CriticalPairInfo cpInfo, Map<TRSTerm, ImmutableList<RewriteStep>> normalFormCache) {
         this(rules, cpInfo.s(), cpInfo.t(), new BiTreeNode<>(new RewriteStep(cpInfo.divergence(), Position.EPSILON, cpInfo.sRule(), cpInfo.s())), new BiTreeNode<>(new RewriteStep(cpInfo.divergence(), Position.EPSILON, cpInfo.tRule(), cpInfo.t())), normalFormCache, cpInfo);
     }
 
-    public TrsTermJoinTree(Map<FunctionSymbol, ? extends Set<? extends T>> rules, TRSTerm s, TRSTerm t) {
+    public TrsTermJoinTree(Map<FunctionSymbol, ? extends Set<Rule>> rules, TRSTerm s, TRSTerm t) {
         this(rules, s, t, new BiTreeNode<>(new RewriteStep(null, null, null, s)), new BiTreeNode<>(new RewriteStep(null, null, null, t)), new HashMap<>(), null);
     }
 
-    private TrsTermJoinTree(Map<FunctionSymbol, ? extends Set<? extends T>> rules, TRSTerm s, TRSTerm t, BiTreeNode<RewriteStep> sTree, BiTreeNode<RewriteStep> tTree, Map<TRSTerm, ImmutableList<RewriteStep>> normalFormCache, CriticalPairInfo cpInfo) {
+    private TrsTermJoinTree(Map<FunctionSymbol, ? extends Set<Rule>> rules, TRSTerm s, TRSTerm t, BiTreeNode<RewriteStep> sTree, BiTreeNode<RewriteStep> tTree, Map<TRSTerm, ImmutableList<RewriteStep>> normalFormCache, CriticalPairInfo cpInfo) {
         this.rules = rules;
         this.cpInfo = cpInfo;
         this.s = s;
@@ -52,13 +49,16 @@ public class TrsTermJoinTree<T extends GeneralizedRule> {
     }
 
     JoinableResult areTermsJoinable(int start, int limit, CriticalPairs.SearchMode searchMode, Abortion aborter) {
+        if (s.equals(t))
+            return new JoinableResult.Joinable(ImmutableCreator.create(Collections.emptyList()), ImmutableCreator.create(Collections.emptyList()));
+
         if (start >= limit)
             return new JoinableResult.Maybe();
 
         if (normalFormCache != null) {
             ImmutableList<RewriteStep> leftNF = normalFormCache.get(s);
             ImmutableList<RewriteStep> rightNF = normalFormCache.get(t);
-            if (leftNF != null && rightNF != null && leftNF.size() > 1 && rightNF.size() > 1 && !leftNF.getLast().substitutedTerm().equals(rightNF.getLast().substitutedTerm()))
+            if (leftNF != null && rightNF != null && !leftNF.getLast().substitutedTerm().equals(rightNF.getLast().substitutedTerm()))
                 return new JoinableResult.WcrCounterExample.NonConfluent(leftNF, rightNF);
         }
 

@@ -20,7 +20,7 @@ public class CriticalPairs {
 
     private volatile AbortableIterator<CriticalPairInfo> critPairIterator;
 
-    private Map<FunctionSymbol, ? extends Set<? extends GeneralizedRule>> ruleMap;
+    private Map<FunctionSymbol, ? extends Set<Rule>> ruleMap;
 
     private Boolean gotNonTrivialRootCritpair;
     private Boolean gotNonRootCritpairs;
@@ -45,8 +45,8 @@ public class CriticalPairs {
     
     private final Map<TRSTerm, ImmutableList<RewriteStep>> normalFormsReachable = new LinkedHashMap<>();
 
-    public CriticalPairs(final Set<? extends GeneralizedRule> rls,
-                         final Map<FunctionSymbol, ? extends Set<? extends GeneralizedRule>> ruleMap) {
+    public CriticalPairs(final Set<Rule> rls,
+                         final Map<FunctionSymbol, ? extends Set<Rule>> ruleMap) {
         assert !Globals.useAssertions || (ruleMap != null && rls != null);
 
         this.critPairIterator = new CriticalPairGenerator(rls);
@@ -484,16 +484,16 @@ public class CriticalPairs {
      * @param limit a natural number
      * @throws AbortionException
      */
-    static <T extends GeneralizedRule> JoinableResult critPairIsJoinable(
+    static JoinableResult critPairIsJoinable(
             final CriticalPairInfo criticalPairInfo,
             final int start,
             final int limit,
-            final Map<FunctionSymbol, ? extends Set<? extends T>> rules,
+            final Map<FunctionSymbol, ? extends Set<Rule>> rules,
             Map<TRSTerm, ImmutableList<RewriteStep>> normalFormCache,
             SearchMode searchMode,
             final Abortion aborter) throws AbortionException {
 
-        TrsTermJoinTree<T> joinTree = new TrsTermJoinTree<>(rules, criticalPairInfo, normalFormCache);
+        TrsTermJoinTree joinTree = new TrsTermJoinTree(rules, criticalPairInfo, normalFormCache);
         return joinTree.areTermsJoinable(start, limit, searchMode, aborter);
     }
 
@@ -502,8 +502,8 @@ public class CriticalPairs {
     private static class CriticalPairGenerator implements AbortableIterator<CriticalPairInfo> {
 
         private static final int MASK = 0x20;
-        private final GeneralizedRule[] renumberedRules;
-        private final GeneralizedRule[] originalRules; 
+        private final Rule[] renumberedRules;
+        private final Rule[] originalRules;
         private int posRoot, posOther;
         private final int n, n_minus_1;
         private boolean nextValid;
@@ -511,13 +511,13 @@ public class CriticalPairs {
         private Iterator<Pair<Position, TRSFunctionApplication>> currentOtherPositions;
         private int count = 0;
 
-        private CriticalPairGenerator(Set<? extends GeneralizedRule> rules) {
+        private CriticalPairGenerator(Set<Rule> rules) {
             this.n = rules.size();
             this.n_minus_1 = this.n - 1;
-            this.renumberedRules = new GeneralizedRule[this.n];
-            this.originalRules = new GeneralizedRule[this.n];
+            this.renumberedRules = new Rule[this.n];
+            this.originalRules = new Rule[this.n];
             int i = 0;
-            for (GeneralizedRule rule : rules) {
+            for (Rule rule : rules) {
                 this.originalRules[i] = rule;
                 this.renumberedRules[i] = rule.getWithRenumberedVariables(TRSTerm.SECOND_STANDARD_PREFIX);
                 i++;
@@ -539,12 +539,12 @@ public class CriticalPairs {
             if (this.currentOtherPositions != null) {
                 while (this.posRoot != this.n) {
                     final GeneralizedRule rootRule = this.renumberedRules[this.posRoot];
-                    final GeneralizedRule originalRootRule = this.originalRules[this.posRoot];
+                    final Rule originalRootRule = this.originalRules[this.posRoot];
                     final TRSTerm left = rootRule.getLhsInStandardRepresentation();
                     final TRSTerm right = rootRule.getRhsInStandardRepresentation();
                     while (this.posOther != this.n) {
                         final GeneralizedRule otherRule = this.renumberedRules[this.posOther];
-                        final GeneralizedRule originalOtherRule = this.originalRules[this.posOther]; 
+                        final Rule originalOtherRule = this.originalRules[this.posOther];
                         final TRSTerm otherLeft = otherRule.getLeft();
                         final TRSTerm otherRight = otherRule.getRight();
                         if (this.currentOtherPositions == null) {
@@ -584,13 +584,13 @@ public class CriticalPairs {
                 this.posOther = 1;
             }
             while (this.posRoot != this.n_minus_1) {
-                final GeneralizedRule rootRule = this.renumberedRules[this.posRoot];
-                final GeneralizedRule originalRootRule = this.originalRules[this.posRoot]; // NEW
+                final Rule rootRule = this.renumberedRules[this.posRoot];
+                final Rule originalRootRule = this.originalRules[this.posRoot]; // NEW
                 final TRSTerm left = rootRule.getLhsInStandardRepresentation();
                 final TRSTerm right = rootRule.getRhsInStandardRepresentation();
                 while (this.posOther != this.n) {
-                    final GeneralizedRule otherRule = this.renumberedRules[this.posOther];
-                    final GeneralizedRule originalOtherRule = this.originalRules[this.posOther]; // NEW
+                    final Rule otherRule = this.renumberedRules[this.posOther];
+                    final Rule originalOtherRule = this.originalRules[this.posOther]; // NEW
                     final TRSTerm otherLeft = otherRule.getLeft();
                     this.posOther++;
                     final TRSSubstitution sigma = left.getMGU(otherLeft);
