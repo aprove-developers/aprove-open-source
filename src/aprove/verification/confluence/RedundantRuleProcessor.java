@@ -24,6 +24,9 @@ import java.util.stream.Collectors;
 
 public class RedundantRuleProcessor implements Processor {
 
+    /** Maximum number of rewrite steps searched when checking whether a rule's left side reaches its right side. */
+    private static final int REACHABILITY_LIMIT = 8;
+
     public static class RedundantRuleProof extends Proof.DefaultProof {
         private final Set<Rule> newRules;
 
@@ -47,6 +50,11 @@ public class RedundantRuleProcessor implements Processor {
         var confTRSProblem = (ConfTRSProblem) obl;
 
         var newConfTRSProblem = removeRedundantRules(confTRSProblem, aborter);
+
+        if(newConfTRSProblem.equals(confTRSProblem)){
+            return ResultFactory.unsuccessful("No rules have been removed.");
+        }
+
         return ResultFactory.provedAnd(List.of(newConfTRSProblem), YNMImplication.SOUND, new RedundantRuleProof(newConfTRSProblem.getRules()));
     }
 
@@ -97,11 +105,14 @@ public class RedundantRuleProcessor implements Processor {
             return doRemove;
         });
 
-        // (del)
+        // (del) A rule l -> r is redundant and may be removed only if l can still reach r in the
+        // remaining TRS (l ->* r). This preserves ->* and hence confluence [NAGELE15]. Note that mere
+        // joinability (l ->* u <-* r) is NOT sufficient: it can drop a rule whose left side can no
+        // longer reach its right side, turning a non-confluent TRS into a confluent one.
         rules.removeIf(rule -> {
             incrementalRuleMap.removeRule(rule);
             var joinTree = new TrsTermJoinTree<>(incrementalRuleMap.getRuleMap(), rule.getLeft(), rule.getRight());
-            var result = joinTree.areTermsJoinable(0, 1, CriticalPairs.SearchMode.EXIT_ON_FIRST_JOIN, aborter);
+            var result = joinTree.areTermsReachable(REACHABILITY_LIMIT, aborter);
             var doRemove = result instanceof JoinableResult.Joinable;
             if (!doRemove)
                 incrementalRuleMap.addRule(rule);
