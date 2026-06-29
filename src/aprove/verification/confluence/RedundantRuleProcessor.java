@@ -100,7 +100,7 @@ public class RedundantRuleProcessor implements Processor {
         // (del)
         rules.removeIf(rule -> {
             incrementalRuleMap.removeRule(rule);
-            var joinTree = new TrsTermJoinTree<>(incrementalRuleMap.getRuleMap(), rule.getLeft(), rule.getRight());
+            var joinTree = new TrsTermJoinTree(incrementalRuleMap.getRuleMap(), rule.getLeft(), rule.getRight());
             var result = joinTree.areTermsJoinable(0, 1, CriticalPairs.SearchMode.EXIT_ON_FIRST_JOIN, aborter);
             var doRemove = result instanceof JoinableResult.Joinable;
             if (!doRemove)

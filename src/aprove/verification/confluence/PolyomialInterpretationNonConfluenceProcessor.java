@@ -235,10 +235,6 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
             }
         }
 
-        /*private Map<String, String> disproveByRecursivePathOrdering(TRSTerm s, TRSTerm t, Set<Rule> rules) {
-
-        }*/
-
         private SMTLIBIntValue encodeTerm(TRSTerm term) {
             if (term instanceof TRSVariable variable)
                 return variables.computeIfAbsent(variable, var -> SMTLIBIntVariable.create(var.getName()));
