@@ -104,6 +104,7 @@ public class DecreasingDiagramsRuleLabellingProcessor implements Processor {
                 // Root overlaps between distinct rules are critical pairs and must be considered! 
                 // A rule can only overlap itself at the root via a trivial critical pair
                 // (s == t), which is already excluded above by cpInfo.isTrivial().
+
                 var rewriteSequences = join.getValue();
 
                 // The stored join sequences begin with the peak step d -> s or d -> t, but their
@@ -190,26 +191,24 @@ public class DecreasingDiagramsRuleLabellingProcessor implements Processor {
             return ff.buildOr(phiLessRho, lexLessTie);
         }
 
-        // The tie case of the STRICT lexicographic less-than: equal first coordinate (phi = rho) and
-        // strictly smaller second coordinate (i < j). This is the second disjunct of <lex.
+        // This is the second disjunct of <lex.
         private Formula<Diophantine> buildLexicographicLessThanTie(SimplePolynomial phi, SimplePolynomial i, SimplePolynomial rho, SimplePolynomial j) {
             var phiEqualsRho = ff.buildTheoryAtom(Diophantine.create(phi, rho, ConstraintType.EQ));
             var iLessJ = ff.buildTheoryAtom(Diophantine.create(j, i, ConstraintType.GT));
             return ff.buildAnd(phiEqualsRho, iLessJ);
         }
 
-        // Equivalence part ~=lex of the lexicographic label order, used for the single "facing" pivot step of a decreasing diagram.
+        // Equivalence part ~=lex of the lexicographic label order.
         //
-        // ERRATUM in Aoto (RTA 2010): Definition 5.2 literally prints
+        // Problem with Aoto (RTA 2010): Definition 5.2 literally prints
         //     <phi, i> ~=lex <rho, j>  =  (phi = rho  and  w_i < w_j)
         // Is the "w_i < w_j" a typo? I believe the intended condition is "w_i = w_j" (true equality). Reasons:
         //   (1) It must agree with the basic encoding, Definition 3.6, whose pivot is "w_xk = w_j".
-        //   (2) ~=lex is the equivalence part of the lexicographic quasi-order; with "<" it is not even
-        //       reflexive, so it is not an equivalence.
+        //   (2) Shouldn't be ~=lex the equivalence part of the lexicographic quasi-order?
+        //       With "<" it is not even reflexive, so it is not an equivalence.
         //   (3) With "<", the pivot step xk would satisfy xk <lex psi (equal context, smaller rule), so
-        //       every pivot disjunct is implied by the allLess disjunct: the facing-step case becomes
-        //       vacuous and [[Ldd2]] collapses to allLess, removing the power of decreasing diagrams.
-        //   (4) With this new definition, we have to false positives. LoL
+        //       every pivot disjunct is implied by the allLess disjunct: the "="-step case becomes
+        //       vacuous and [[Ldd2]] collapses to allLess, removing the power of decreasing diagrams, imo.
         private Formula<Diophantine> buildLexicographicEquals(Label lhs, Label rhs) {
             var ruleEquals = ff.buildTheoryAtom(Diophantine.create(lhs.ruleWeight, rhs.ruleWeight, ConstraintType.EQ));
             var contextEquals = ff.buildTheoryAtom(Diophantine.create(lhs.contextWeight, rhs.contextWeight, ConstraintType.EQ));
