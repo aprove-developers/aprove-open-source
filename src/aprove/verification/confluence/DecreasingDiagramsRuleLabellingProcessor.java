@@ -100,13 +100,25 @@ public class DecreasingDiagramsRuleLabellingProcessor implements Processor {
                 if (cpInfo.isTrivial())
                     continue;
                 var context = cpInfoToContext(cpInfo);
-                // Do not consider self-overlaps at the root position
-                if (cpInfo.isRootOverlap() && context.getValue().x.isEmptyPosition())
-                    continue;
+
+                // Root overlaps between distinct rules are critical pairs and must be considered! 
+                // A rule can only overlap itself at the root via a trivial critical pair
+                // (s == t), which is already excluded above by cpInfo.isTrivial().
                 var rewriteSequences = join.getValue();
-                // Skip the rewrites s <- d -> t
-                var leftLabelSequence = rewriteSequences.x.stream().skip(1).map(this::buildRuleLabel).toList();
-                var rightLabelSequence = rewriteSequences.y.stream().skip(1).map(this::buildRuleLabel).toList();
+
+                // The stored join sequences begin with the peak step d -> s or d -> t, but their
+                // ORDER (x, y) reflects which side found the join, not (s, t). We must pair the join
+                // sequence starting at s with the peak labels (phi=s-rule, psi=t-rule) and the one
+                // starting at t with (phi=t-rule, psi=s-rule); otherwise the s-side steps get compared
+                // against the t-peak label, and the "= psi" pivot then wrongly admits equal labels for
+                // mutually recursive rules, see the non-confluent systems (e.g. b->c, c->b, c->a, b->d).
+                var xStartsAtS = rewriteSequences.x.getFirst().substitutedTerm().equals(cpInfo.s());
+                var sRewriteSequence = xStartsAtS ? rewriteSequences.x : rewriteSequences.y;
+                var tRewriteSequence = xStartsAtS ? rewriteSequences.y : rewriteSequences.x;
+
+                // Skip the peak rewrite d -> s or d -> t.
+                var sLabelSequence = sRewriteSequence.stream().skip(1).map(this::buildRuleLabel).toList();
+                var tLabelSequence = tRewriteSequence.stream().skip(1).map(this::buildRuleLabel).toList();
                 var leftContextWeight = collectFunctionSymbolWeightsFromHoleToRoot(context);
                 var weightPoly = SimplePolynomial.plus(leftContextWeight);
                 var firstsRuleWeight = getOrAddRuleWeightVar(new Pair<>(rules.indexOf(cpInfo.sRule()) + 1, false));
@@ -115,8 +127,8 @@ public class DecreasingDiagramsRuleLabellingProcessor implements Processor {
                 var secondRuleWeightPrime = getOrAddRuleWeightVar(new Pair<>(rules.indexOf(cpInfo.tRule()) + 1, true));
                 var phiI = new Label(firstsRuleWeight, weightPoly, firstsRuleWeightPrime);
                 var psiJ = new Label(secondRuleWeight, SimplePolynomial.ZERO, secondRuleWeightPrime);
-                constraints.add(buildLdd2Constraints(phiI, psiJ, leftLabelSequence));
-                constraints.add(buildLdd2Constraints(psiJ, phiI, rightLabelSequence));
+                constraints.add(buildLdd2Constraints(phiI, psiJ, sLabelSequence));
+                constraints.add(buildLdd2Constraints(psiJ, phiI, tLabelSequence));
             }
 
             return ff.buildAnd(constraints);
@@ -169,27 +181,39 @@ public class DecreasingDiagramsRuleLabellingProcessor implements Processor {
         }
 
         private Formula<Diophantine> buildLexicographicLessThan(Label lhs, Label rhs) {
-            var firstQuasiOrder = buildLexicographicLessThan(lhs.contextWeight, lhs.ruleWeight, rhs.contextWeight, rhs.ruleWeight);
-            var secondQuasiOrder = buildLexicographicLessThan(lhs.ruleWeightPrime, lhs.contextWeight, rhs.ruleWeightPrime, rhs.contextWeight);
-            return ff.buildOr(firstQuasiOrder, secondQuasiOrder);
+            return buildLexicographicLessThan(lhs.contextWeight, lhs.ruleWeight, rhs.contextWeight, rhs.ruleWeight);
         }
 
         private Formula<Diophantine> buildLexicographicLessThan(SimplePolynomial phi, SimplePolynomial i, SimplePolynomial rho, SimplePolynomial j) {
             var phiLessRho = ff.buildTheoryAtom(Diophantine.create(rho, phi, ConstraintType.GT));
-            var lexEquals = buildLexicographicEquals(phi, i, rho, j);
-            return ff.buildOr(phiLessRho, lexEquals);
+            var lexLessTie = buildLexicographicLessThanTie(phi, i, rho, j);
+            return ff.buildOr(phiLessRho, lexLessTie);
         }
 
-        private Formula<Diophantine> buildLexicographicEquals(SimplePolynomial phi, SimplePolynomial i, SimplePolynomial rho, SimplePolynomial j) {
+        // The tie case of the STRICT lexicographic less-than: equal first coordinate (phi = rho) and
+        // strictly smaller second coordinate (i < j). This is the second disjunct of <lex.
+        private Formula<Diophantine> buildLexicographicLessThanTie(SimplePolynomial phi, SimplePolynomial i, SimplePolynomial rho, SimplePolynomial j) {
             var phiEqualsRho = ff.buildTheoryAtom(Diophantine.create(phi, rho, ConstraintType.EQ));
             var iLessJ = ff.buildTheoryAtom(Diophantine.create(j, i, ConstraintType.GT));
             return ff.buildAnd(phiEqualsRho, iLessJ);
         }
 
+        // Equivalence part ~=lex of the lexicographic label order, used for the single "facing" pivot step of a decreasing diagram.
+        //
+        // ERRATUM in Aoto (RTA 2010): Definition 5.2 literally prints
+        //     <phi, i> ~=lex <rho, j>  =  (phi = rho  and  w_i < w_j)
+        // Is the "w_i < w_j" a typo? I believe the intended condition is "w_i = w_j" (true equality). Reasons:
+        //   (1) It must agree with the basic encoding, Definition 3.6, whose pivot is "w_xk = w_j".
+        //   (2) ~=lex is the equivalence part of the lexicographic quasi-order; with "<" it is not even
+        //       reflexive, so it is not an equivalence.
+        //   (3) With "<", the pivot step xk would satisfy xk <lex psi (equal context, smaller rule), so
+        //       every pivot disjunct is implied by the allLess disjunct: the facing-step case becomes
+        //       vacuous and [[Ldd2]] collapses to allLess, removing the power of decreasing diagrams.
+        //   (4) With this new definition, we have to false positives. LoL
         private Formula<Diophantine> buildLexicographicEquals(Label lhs, Label rhs) {
-            var firstQuasiOrder = buildLexicographicEquals(lhs.contextWeight, lhs.ruleWeight, rhs.contextWeight, rhs.ruleWeight);
-            var secondQuasiOrder = buildLexicographicEquals(lhs.ruleWeightPrime, lhs.contextWeight, rhs.ruleWeightPrime, rhs.contextWeight);
-            return ff.buildOr(firstQuasiOrder, secondQuasiOrder);
+            var ruleEquals = ff.buildTheoryAtom(Diophantine.create(lhs.ruleWeight, rhs.ruleWeight, ConstraintType.EQ));
+            var contextEquals = ff.buildTheoryAtom(Diophantine.create(lhs.contextWeight, rhs.contextWeight, ConstraintType.EQ));
+            return ff.buildAnd(ruleEquals, contextEquals);
         }
 
         private Label buildRuleLabel(RewriteStep step) {
