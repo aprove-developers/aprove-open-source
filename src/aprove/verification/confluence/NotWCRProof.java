@@ -25,7 +25,7 @@ public class NotWCRProof extends DefaultProof {
                 o.cond_linebreak() +
                 o.export("These are the Rules causing the unjoinable critical Pair:") +
                 o.cond_linebreak() +
-                o.set(Set.of(criticalPairInfo.sRule(), criticalPairInfo.tRule()), Export_Util.RULES) +
+                o.set(List.of(criticalPairInfo.sRule(), criticalPairInfo.tRule()), Export_Util.RULES) +
                 o.cond_linebreak() +
                 o.export("This leads to the following divergence:") +
                 o.cond_linebreak() +
