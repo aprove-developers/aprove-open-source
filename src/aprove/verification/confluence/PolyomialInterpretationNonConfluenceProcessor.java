@@ -10,6 +10,7 @@ import aprove.strategies.Abortions.Abortion;
 import aprove.strategies.Abortions.AbortionException;
 import aprove.strategies.Annotations.ParamsViaArgumentObject;
 import aprove.strategies.ExecutableStrategies.RuntimeInformation;
+import aprove.verification.confluence.Utility.CriticalPairInfo;
 import aprove.verification.dpframework.BasicStructures.Rule;
 import aprove.verification.dpframework.BasicStructures.TRSFunctionApplication;
 import aprove.verification.dpframework.BasicStructures.TRSTerm;
@@ -53,23 +54,26 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
 
         var oneStepUnfolding = computeOneStepUnfolding(confTrsProblem.getRules());
         var newConfTrsProblem = ConfTRSProblem.create(ImmutableCreator.create(oneStepUnfolding));
-        var criticalPairs = newConfTrsProblem.getCriticalPairs().getAllFoundCriticalPairs(aborter);
+        var criticalPairs = newConfTrsProblem.getCriticalPairs().getAllFoundCriticalPairs(aborter)
+                .stream()
+                .filter(cp -> !cp.isTrivial())
+                .filter(cp -> cp.s().isGroundTerm() && cp.t().isGroundTerm())
+                .sorted(Comparator.comparingInt((CriticalPairInfo cp) -> (cp.s().getSize() + cp.t().getSize())))
+                .toList();
 
         int limit = arguments.MaxNumberOfCriticalPairs;
         for (var candidate : criticalPairs) {
             if (limit <= 0)
                 break;
 
-            if (candidate.isTrivial() || !(candidate.s().isGroundTerm() && candidate.t().isGroundTerm()))
-                continue;
-
             var state = new PolynomialInterpretationNonConfluenceProcessorState(arguments, confTrsProblem, smtEngine, aborter);
-            var polynomialOrder = state.disproveByOrdering(candidate.s(), candidate.t());
-            if (polynomialOrder != null)
-                return ResultFactory.disproved(new NotCRProof(candidate.divergence(), candidate.s(), candidate.t()));
 
             var interpretation = state.disproveByPolynomialInterpretation(candidate.s(), candidate.t());
             if (interpretation != null)
+                return ResultFactory.disproved(new NotCRProof(candidate.divergence(), candidate.s(), candidate.t()));
+
+            var polynomialOrder = state.disproveByOrdering(candidate.s(), candidate.t());
+            if (polynomialOrder != null)
                 return ResultFactory.disproved(new NotCRProof(candidate.divergence(), candidate.s(), candidate.t()));
 
             limit--;
@@ -275,6 +279,8 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
 
         private POLO disproveByOrderingDirected(TRSTerm high, TRSTerm low, Set<Rule> highUsableRules, Set<Rule> lowUsableRules) {
             List<Diophantine> constraints = new LinkedList<>();
+
+            // [[l]] >= [[r]] for all l -> r in U_r(R, low)
             for (var highRule : highUsableRules) {
                 var lhs = encodeTerm(highRule.getLeft());
                 var rhs = encodeTerm(highRule.getRight());
@@ -282,6 +288,7 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
                 addConstraints(rhsMinusLhs, ConstraintType.GE, constraints);
             }
 
+            // [[l]] <= [[r]] for all l -> r in U_r(R, high)
             for (var lowRule : lowUsableRules) {
                 var lhs = encodeTerm(lowRule.getLeft());
                 var rhs = encodeTerm(lowRule.getRight());
@@ -289,10 +296,12 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
                 addConstraints(lhsMinusRhs, ConstraintType.GE, constraints);
             }
 
+            // [[high]] > [[low]]
             var highEncoding = encodeTerm(high);
             var lowEncoding = encodeTerm(low);
             var highMinusLow = highEncoding.minus(lowEncoding);
             addConstraints(highMinusLow, ConstraintType.GT, constraints);
+
             constraints.addAll(functionCoefficients.values().stream().flatMap(List::stream).map(coefficients -> Diophantine.create(coefficients, ConstraintType.GE)).toList());
             var conjunction = dff.buildAnd(dff.buildTheoryAtoms(constraints));
             var poloSolver = arguments.Order.getPOLOSolver(functionSymbols, aborter);
