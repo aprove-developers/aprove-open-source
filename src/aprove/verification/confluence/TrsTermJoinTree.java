@@ -86,7 +86,7 @@ public class TrsTermJoinTree {
      * Checks whether the left term {@code s} can reach the right term {@code t}, i.e. whether
      * {@code s ->* t}, by rewriting <em>only</em> {@code s}.
      */
-    JoinableResult areTermsReachable(int limit, Abortion aborter) {
+    JoinableResult isRightTermReachable(int limit, Abortion aborter) {
         if (s.equals(t))
             return new JoinableResult.Joinable(buildRewriteSequence(sLastLayer.iterator().next()), buildRewriteSequence(tLastLayer.iterator().next()));
 
