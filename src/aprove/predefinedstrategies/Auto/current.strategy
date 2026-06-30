@@ -2123,6 +2123,7 @@ critical_pair_analysis = LocalConfluenceProcessor
 conf_trs_preprocess = RedundantRulesProcessor
 
 conf_trs_decreasing_diagram = DecreasingDiagramsRuleLabellingProcessor[Order = POLO[Degree = 1, Engine = SMTLIB]]
+conf_trs_interpretation_non_cr = InterpretationNonConfluenceProcessor[Order = POLO[Engine = SMTLIB]]
 
 newmanlemma_solve = Solve(
             ConfNewmanProcessor : Any(
@@ -2133,9 +2134,9 @@ newmanlemma_solve = Solve(
 
 conf_atomic_trs = First(
             conf_trs_preprocess : conf_trs_decreasing_diagram,
-            InterpretationNonConfluenceProcessor,
-            LimitedNotWCRProcessor,
+            conf_trs_interpretation_non_cr
             newmanlemma_solve,
+            LimitedNotWCRProcessor,
             NonConfluenceProcessor
         )
 
@@ -2161,7 +2162,6 @@ conf_trs_toyama = First(
         )
 
 conf_trs = First(
-            #StronglyQuasiLinearHierarchicallyDecreasingnessProcessor
             ConfOrthogonalProcessor,
             StrongConfluenceProcessor,
             DisjointUnionProcessor : conf_trs_toyama,
