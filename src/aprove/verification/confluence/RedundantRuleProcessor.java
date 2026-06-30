@@ -69,6 +69,7 @@ public class RedundantRuleProcessor implements Processor {
 
     private static ConfTRSProblem removeRedundantRules(ConfTRSProblem confTRSProblem, Abortion aborter) {
         Set<Rule> rules = new LinkedHashSet<>(confTRSProblem.getRules());
+        var incrementalRuleMap = new IncrementalRuleMap(rules);
 
         // (js)
         var criticalPairs = confTRSProblem.getCriticalPairs();
@@ -88,14 +89,14 @@ public class RedundantRuleProcessor implements Processor {
 
         // (rhs)
         Set<Rule> rhsRules = rules.stream()
-                .flatMap(rule1 -> rules.stream()
-                    .filter(rule2 -> rule1.getRight().unifies(rule2.getLeft()))
-                    .map(rule2 -> Rule.create(rule1.getLeft(), rule2.getRight())))
+                .flatMap(r -> r.getRight()
+                        .rewrite(incrementalRuleMap.getRuleMap())
+                        .stream()
+                        .map(rewrite -> Rule.create(r.getLeft(), rewrite)))
                 .collect(Collectors.toSet());
         rules.addAll(rhsRules);
 
         // Remove rules that others can simulate
-        var incrementalRuleMap = new IncrementalRuleMap(rules);
         var fng = new FreshNameGenerator(incrementalRuleMap.getDefinedSymbols(), FreshNameGenerator.VARIABLES);
         rules.removeIf(rule -> {
             incrementalRuleMap.removeRule(rule);
@@ -112,7 +113,7 @@ public class RedundantRuleProcessor implements Processor {
         rules.removeIf(rule -> {
             incrementalRuleMap.removeRule(rule);
             var joinTree = new TrsTermJoinTree(incrementalRuleMap.getRuleMap(), rule.getLeft(), rule.getRight());
-            var result = joinTree.areTermsReachable(REACHABILITY_LIMIT, aborter);
+            var result = joinTree.isRightTermReachable(REACHABILITY_LIMIT, aborter);
             var doRemove = result instanceof JoinableResult.Joinable;
             if (!doRemove)
                 incrementalRuleMap.addRule(rule);
