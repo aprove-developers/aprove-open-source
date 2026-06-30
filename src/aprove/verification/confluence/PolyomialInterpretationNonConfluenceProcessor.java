@@ -5,6 +5,7 @@ import aprove.prooftree.Obligations.BasicObligationNode;
 import aprove.solver.Engines.SMTEngine;
 import aprove.solver.Engines.SMTLIBEngine;
 import aprove.solver.Engines.WrongLogicException;
+import aprove.solver.SolverFactory;
 import aprove.strategies.Abortions.Abortion;
 import aprove.strategies.Abortions.AbortionException;
 import aprove.strategies.Annotations.ParamsViaArgumentObject;
@@ -13,32 +14,28 @@ import aprove.verification.dpframework.BasicStructures.Rule;
 import aprove.verification.dpframework.BasicStructures.TRSFunctionApplication;
 import aprove.verification.dpframework.BasicStructures.TRSTerm;
 import aprove.verification.dpframework.BasicStructures.TRSVariable;
+import aprove.verification.dpframework.Orders.POLO;
 import aprove.verification.dpframework.Processor;
 import aprove.verification.dpframework.Result;
 import aprove.verification.dpframework.ResultFactory;
+import aprove.verification.oldframework.Algebra.Polynomials.ConstraintType;
+import aprove.verification.oldframework.Algebra.Polynomials.SimplePolynomial;
 import aprove.verification.oldframework.BasicStructures.FunctionSymbol;
 import aprove.verification.oldframework.Logic.YNM;
 import aprove.verification.oldframework.PropositionalLogic.Formula;
 import aprove.verification.oldframework.PropositionalLogic.FormulaFactory;
 import aprove.verification.oldframework.PropositionalLogic.Formulae.NonCountingCircuitFactory;
 import aprove.verification.oldframework.PropositionalLogic.SMTLIB.SMTLIBInt.SMTLIBIntComparison.SMTLIBIntEquals;
-import aprove.verification.oldframework.PropositionalLogic.SMTLIB.SMTLIBInt.SMTLIBIntComparison.SMTLIBIntGE;
-import aprove.verification.oldframework.PropositionalLogic.SMTLIB.SMTLIBInt.SMTLIBIntComparison.SMTLIBIntGT;
-import aprove.verification.oldframework.PropositionalLogic.SMTLIB.SMTLIBInt.SMTLIBIntComparison.SMTLIBIntLE;
 import aprove.verification.oldframework.PropositionalLogic.SMTLIB.SMTLIBInt.SMTLIBIntConstant;
-import aprove.verification.oldframework.PropositionalLogic.SMTLIB.SMTLIBInt.SMTLIBIntFunctions.SMTLIBIntMinus;
 import aprove.verification.oldframework.PropositionalLogic.SMTLIB.SMTLIBInt.SMTLIBIntFunctions.SMTLIBIntMod;
-import aprove.verification.oldframework.PropositionalLogic.SMTLIB.SMTLIBInt.SMTLIBIntFunctions.SMTLIBIntMult;
-import aprove.verification.oldframework.PropositionalLogic.SMTLIB.SMTLIBInt.SMTLIBIntFunctions.SMTLIBIntPlus;
-import aprove.verification.oldframework.PropositionalLogic.SMTLIB.SMTLIBInt.SMTLIBIntValue;
-import aprove.verification.oldframework.PropositionalLogic.SMTLIB.SMTLIBInt.SMTLIBIntVariable;
 import aprove.verification.oldframework.PropositionalLogic.SMTLIB.SMTLIBTheoryAtom;
+import aprove.verification.oldframework.PropositionalLogic.TheoryPropositions.Diophantine;
 import aprove.verification.oldframework.Utility.FreshNameGenerator;
 import immutables.ImmutableCreator;
-import immutables.ImmutableSet;
 
 import java.math.BigInteger;
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class PolyomialInterpretationNonConfluenceProcessor implements Processor {
@@ -57,7 +54,6 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
         var oneStepUnfolding = computeOneStepUnfolding(confTrsProblem.getRules());
         var newConfTrsProblem = ConfTRSProblem.create(ImmutableCreator.create(oneStepUnfolding));
         var criticalPairs = newConfTrsProblem.getCriticalPairs().getAllFoundCriticalPairs(aborter);
-        var state = new PolynomialInterpretationNonConfluenceProcessorState(arguments, aborter, smtEngine);
 
         int limit = arguments.MaxNumberOfCriticalPairs;
         for (var candidate : criticalPairs) {
@@ -67,12 +63,13 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
             if (candidate.isTrivial() || !(candidate.s().isGroundTerm() && candidate.t().isGroundTerm()))
                 continue;
 
-            var result = state.disproveByPolynomialInterpretation(candidate.s(), candidate.t(), confTrsProblem.getRules());
+            var state = new PolynomialInterpretationNonConfluenceProcessorState(arguments, confTrsProblem, smtEngine, aborter);
+            var polynomialOrder = state.disproveByOrdering(candidate.s(), candidate.t());
+            if (polynomialOrder != null)
+                return ResultFactory.disproved(new NotCRProof(candidate.divergence(), candidate.s(), candidate.t()));
 
-            if (result == null)
-                result = state.disproveByOrdering(candidate.s(), candidate.t(), confTrsProblem);
-
-            if (result != null)
+            var interpretation = state.disproveByPolynomialInterpretation(candidate.s(), candidate.t());
+            if (interpretation != null)
                 return ResultFactory.disproved(new NotCRProof(candidate.divergence(), candidate.s(), candidate.t()));
 
             limit--;
@@ -87,6 +84,7 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
     }
 
     public static class Arguments {
+        public SolverFactory Order;
         public int MaxNumberOfCriticalPairs = 100;
         public int Modulus = 3;
     }
@@ -145,50 +143,108 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
         return res;
     }
 
-    private static class PolynomialInterpretationNonConfluenceProcessorState {
-        private final Arguments arguments;
-        private final Abortion aborter;
-        private final SMTEngine smtEngine;
-        private final FormulaFactory<SMTLIBTheoryAtom> ff = new NonCountingCircuitFactory<>();
-        private final Map<FunctionSymbol, List<SMTLIBIntVariable>> functionCoefficients = new LinkedHashMap<>();
-        private final Map<TRSVariable, SMTLIBIntVariable> variables = new LinkedHashMap<>();
+    private record LinearPolynomial(SimplePolynomial constantPart, Map<TRSVariable, SimplePolynomial> coefficientsForVariable) {
+        public LinearPolynomial plus(LinearPolynomial other) {
+                var newConstantPart = constantPart.plus(other.constantPart);
+                var newCoefficientsForVariables = new LinkedHashMap<TRSVariable, SimplePolynomial>(coefficientsForVariable.size());
+                for (var entry : coefficientsForVariable.entrySet()) {
+                    var otherValue = other.coefficientsForVariable.getOrDefault(entry.getKey(), SimplePolynomial.ZERO);
+                    newCoefficientsForVariables.put(entry.getKey(), entry.getValue().plus(otherValue));
+                }
 
-        private PolynomialInterpretationNonConfluenceProcessorState(Arguments arguments, Abortion aborter, SMTEngine smtEngine) {
-            this.arguments = arguments;
-            this.aborter = aborter;
-            this.smtEngine = smtEngine;
+                other.coefficientsForVariable.forEach(newCoefficientsForVariables::putIfAbsent);
+                return new LinearPolynomial(newConstantPart, newCoefficientsForVariables);
+            }
+
+            public LinearPolynomial minus(LinearPolynomial other) {
+                var newConstantPart = constantPart.minus(other.constantPart);
+                var newCoefficientsForVariables = new LinkedHashMap<TRSVariable, SimplePolynomial>(coefficientsForVariable.size());
+                for (var entry : coefficientsForVariable.entrySet()) {
+                    var otherValue = other.coefficientsForVariable.getOrDefault(entry.getKey(), SimplePolynomial.ZERO);
+                    newCoefficientsForVariables.put(entry.getKey(), entry.getValue().minus(otherValue));
+                }
+
+                other.coefficientsForVariable.forEach(newCoefficientsForVariables::putIfAbsent);
+                return new LinearPolynomial(newConstantPart, newCoefficientsForVariables);
+            }
+
+            public LinearPolynomial times(SimplePolynomial functionCoefficient) {
+                var newConstantPart = constantPart.times(functionCoefficient);
+                var newCoefficientsForVariables = new LinkedHashMap<TRSVariable, SimplePolynomial>(coefficientsForVariable.size());
+                for (var entry : coefficientsForVariable.entrySet()) {
+                    var newCoefficient = entry.getValue().times(functionCoefficient);
+                    newCoefficientsForVariables.put(entry.getKey(), newCoefficient);
+                }
+
+                return new LinearPolynomial(newConstantPart, newCoefficientsForVariables);
+            }
         }
 
-        private Map<String, String> disproveByPolynomialInterpretation(TRSTerm s, TRSTerm t, Set<Rule> rules) {
-            var usableRules = computeUsableRules(rules, s);
-            usableRules.addAll(computeUsableRules(rules, t));
-            List<SMTLIBTheoryAtom> rulesEqualZeroModK = new LinkedList<>();
+    private static class PolynomialInterpretationNonConfluenceProcessorState {
+        private final Arguments arguments;
+        private final Set<Rule> renamedRules;
+        private final Set<FunctionSymbol> functionSymbols;
+        private final SMTEngine smtEngine;
+        private final Abortion aborter;
+        private final FormulaFactory<SMTLIBTheoryAtom> ff = new NonCountingCircuitFactory<>();
+        private final FormulaFactory<Diophantine> dff = new NonCountingCircuitFactory<>();
+        private final Map<FunctionSymbol, List<SimplePolynomial>> functionCoefficients = new LinkedHashMap<>();
 
-            var modulus = SMTLIBIntConstant.create(BigInteger.valueOf(arguments.Modulus));
-            var zero = SMTLIBIntConstant.create(BigInteger.ZERO);
+        private final SMTLIBIntConstant zero = SMTLIBIntConstant.create(BigInteger.ZERO);
+        private final SMTLIBIntConstant modulus;
+
+        private PolynomialInterpretationNonConfluenceProcessorState(Arguments arguments, ConfTRSProblem confTRSProblem, SMTEngine smtEngine, Abortion aborter) {
+            this.arguments = arguments;
+            var rules = confTRSProblem.getRules();
+            var forbiddenVars = rules.stream().flatMap(rr -> rr.getVariables().stream()).collect(Collectors.toSet());
+            this.renamedRules = rules.stream().map(r -> {
+                var renamedRule = r.renameVariables(forbiddenVars);
+                forbiddenVars.addAll(renamedRule.getVariables());
+                return renamedRule;
+            }).collect(Collectors.toSet());
+            this.functionSymbols = confTRSProblem.getDefinedSymbolsOfR();
+            this.smtEngine = smtEngine;
+            this.aborter = aborter;
+            this.modulus = SMTLIBIntConstant.create(BigInteger.valueOf(arguments.Modulus));
+        }
+
+        private Map<String, String> disproveByPolynomialInterpretation(TRSTerm s, TRSTerm t) {
+            var usableRules = computeUsableRules(renamedRules, s);
+            usableRules.addAll(computeUsableRules(renamedRules, t));
+            List<SMTLIBTheoryAtom> rulesEqualZeroModK = new LinkedList<>();
 
             var sEncoding = encodeTerm(s);
             var tEncoding = encodeTerm(t);
-            var sMinusT = SMTLIBIntMinus.create(List.of(sEncoding, tEncoding));
-            var sMinusTModK = SMTLIBIntMod.create(List.of(sMinusT, modulus));
+            var sMinusT = sEncoding.minus(tEncoding);
+            var sMinusTModK = SMTLIBIntMod.create(List.of(sMinusT.constantPart().toSMTLIB(), modulus));
             var sEqualsTModKEqualsZero = SMTLIBIntEquals.create(sMinusTModK, zero);
 
             for (var rule : usableRules) {
                 var lhs = encodeTerm(rule.getLeft());
                 var rhs = encodeTerm(rule.getRight());
-                var lhsMinusRhs = SMTLIBIntMinus.create(List.of(lhs, rhs));
-                var lhsMinusRhsModK = SMTLIBIntMinus.create(List.of(lhsMinusRhs, modulus));
-                rulesEqualZeroModK.add(SMTLIBIntEquals.create(lhsMinusRhsModK, zero));
+                var lhsMinusRhs = lhs.minus(rhs);
+                var constantPartModK = SMTLIBIntMod.create(List.of(lhsMinusRhs.constantPart().toSMTLIB(), modulus));
+                rulesEqualZeroModK.add(SMTLIBIntEquals.create(constantPartModK, zero));
+                for (var coefficients : lhsMinusRhs.coefficientsForVariable().values()) {
+                    var coefficientModK = SMTLIBIntMod.create(List.of(coefficients.toSMTLIB(), modulus));
+                    rulesEqualZeroModK.add(SMTLIBIntEquals.create(coefficientModK, zero));
+                }
             }
 
+            var searchSpaceValues = IntStream.range(0, arguments.Modulus).mapToObj(i -> SMTLIBIntConstant.create(BigInteger.valueOf(i))).toList();
+            List<Formula<SMTLIBTheoryAtom>> searchSpaceConstraints = functionCoefficients.values()
+                    .stream()
+                    .flatMap(Collection::stream)
+                    .map(var -> searchSpaceValues.stream().map(value -> (Formula<SMTLIBTheoryAtom>) ff.buildTheoryAtom(SMTLIBIntEquals.create(var.toSMTLIB(), value))).toList())
+                    .map(ff::buildOr)
+                    .toList();
+            List<Formula<SMTLIBTheoryAtom>> constraints = new LinkedList<>(searchSpaceConstraints);
             Formula<SMTLIBTheoryAtom> notSEqualsTModK = ff.buildNot(ff.buildTheoryAtom(sEqualsTModKEqualsZero));
-            Formula<SMTLIBTheoryAtom> allRulesEqualZeroModK = ff.buildAnd(ff.buildTheoryAtoms(rulesEqualZeroModK));
-
-            Formula<SMTLIBTheoryAtom> allVarsGEZero = ff.buildAnd(variables.values().stream().map(v -> ff.buildTheoryAtom(SMTLIBIntGE.create(v, zero))).toList());
-            Formula<SMTLIBTheoryAtom> allFunctionVarsGEZero = ff.buildAnd(functionCoefficients.values().stream().flatMap(List::stream).map(v -> ff.buildTheoryAtom(SMTLIBIntGE.create(v, zero))).toList());
+            constraints.add(notSEqualsTModK);
+            constraints.addAll(ff.buildTheoryAtoms(rulesEqualZeroModK));
 
             try {
-                var result = smtEngine.solve(List.of(allVarsGEZero, allFunctionVarsGEZero, notSEqualsTModK, allRulesEqualZeroModK), SMTEngine.SMTLogic.QF_LIA, aborter);
+                var result = smtEngine.solve(constraints, SMTEngine.SMTLogic.QF_NIA, aborter);
                 if (result.x == YNM.YES)
                     return result.y;
                 return null;
@@ -197,108 +253,116 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
             }
         }
 
-        private Map<String, String> disproveByOrdering(TRSTerm s, TRSTerm t, ConfTRSProblem confTRSProblem) {
-            var rules = confTRSProblem.getRules();
-            var usableRulesS = computeUsableRules(rules, s);
-            var usableRulesT = computeUsableRules(rules, t);
+        private POLO disproveByOrdering(TRSTerm s, TRSTerm t) {
+            var usableRulesS = computeUsableRules(renamedRules, s);
+            var usableRulesT = computeUsableRules(renamedRules, t);
 
-            List<SMTLIBTheoryAtom> constraints = new LinkedList<>();
+            var result = disproveByOrderingDirected(s, t, usableRulesS, usableRulesT);
+            if (result == null)
+                result = disproveByOrderingDirected(t, s, usableRulesT, usableRulesS);
 
-            for (var rule : usableRulesS) {
-                var lhs = encodeTerm(rule.getLeft());
-                var rhs = encodeTerm(rule.getRight());
-                var lhsLessEqualsRhs = SMTLIBIntLE.create(lhs, rhs);
-                constraints.add(lhsLessEqualsRhs);
-            }
+            return result;
+        }
 
-            for (var rule : usableRulesT) {
-                var lhs = encodeTerm(rule.getLeft());
-                var rhs = encodeTerm(rule.getRight());
-                var lhsGreaterEqualsRhs = SMTLIBIntGE.create(lhs, rhs);
-                constraints.add(lhsGreaterEqualsRhs);
-            }
-
-            var sEncoding = encodeTerm(s);
-            var tEncoding = encodeTerm(t);
-            var sGreaterThanT = SMTLIBIntGT.create(sEncoding, tEncoding);
-            constraints.add(sGreaterThanT);
-
-            var conjunction = ff.buildAnd(ff.buildTheoryAtoms(constraints));
-
-            try {
-                var result = smtEngine.solve(List.of(conjunction), SMTEngine.SMTLogic.QF_LIA, aborter);
-                if (result.x == YNM.YES)
-                    return result.y;
-                return null;
-            } catch (WrongLogicException e) {
-                return null;
+        private void addConstraints(LinearPolynomial encodedRule, ConstraintType constantType, List<Diophantine> constraints) {
+            var constantConstraint = Diophantine.create(encodedRule.constantPart(), constantType);
+            constraints.add(constantConstraint);
+            for (var coefficient : encodedRule.coefficientsForVariable().values()) {
+                var coefficientGreaterEqualsZero = Diophantine.create(coefficient, ConstraintType.GE);
+                constraints.add(coefficientGreaterEqualsZero);
             }
         }
 
-        private SMTLIBIntValue encodeTerm(TRSTerm term) {
-            if (term instanceof TRSVariable variable)
-                return variables.computeIfAbsent(variable, var -> SMTLIBIntVariable.create(var.getName()));
+        private POLO disproveByOrderingDirected(TRSTerm high, TRSTerm low, Set<Rule> highUsableRules, Set<Rule> lowUsableRules) {
+            List<Diophantine> constraints = new LinkedList<>();
+            for (var highRule : highUsableRules) {
+                var lhs = encodeTerm(highRule.getLeft());
+                var rhs = encodeTerm(highRule.getRight());
+                var rhsMinusLhs = rhs.minus(lhs);
+                addConstraints(rhsMinusLhs, ConstraintType.GE, constraints);
+            }
+
+            for (var lowRule : lowUsableRules) {
+                var lhs = encodeTerm(lowRule.getLeft());
+                var rhs = encodeTerm(lowRule.getRight());
+                var lhsMinusRhs = lhs.minus(rhs);
+                addConstraints(lhsMinusRhs, ConstraintType.GE, constraints);
+            }
+
+            var highEncoding = encodeTerm(high);
+            var lowEncoding = encodeTerm(low);
+            var highMinusLow = highEncoding.minus(lowEncoding);
+            addConstraints(highMinusLow, ConstraintType.GT, constraints);
+            constraints.addAll(functionCoefficients.values().stream().flatMap(List::stream).map(coefficients -> Diophantine.create(coefficients, ConstraintType.GE)).toList());
+            var conjunction = dff.buildAnd(dff.buildTheoryAtoms(constraints));
+            var poloSolver = arguments.Order.getPOLOSolver(functionSymbols, aborter);
+            return poloSolver.solveDioFormula(conjunction, aborter);
+        }
+
+        private LinearPolynomial encodeTerm(TRSTerm term) {
+            if (term instanceof TRSVariable variable) {
+                var coefficientsForArguments = new LinkedHashMap<TRSVariable, SimplePolynomial>();
+                coefficientsForArguments.put(variable, SimplePolynomial.ONE);
+                return new LinearPolynomial(SimplePolynomial.ZERO, coefficientsForArguments);
+            }
 
             var functionApplication = (TRSFunctionApplication) term;
-            var cachedVariables = functionCoefficients.computeIfAbsent(
+            var coefficients = functionCoefficients.computeIfAbsent(
                     functionApplication.getFunctionSymbol(),
-                    f -> IntStream.rangeClosed(1, f.getArity()) // TODO: rangeClosed(0, arity)
-                            .mapToObj(i -> SMTLIBIntVariable.create(f.getName() + i))
+                    f -> IntStream.rangeClosed(0, f.getArity())
+                            .mapToObj(i -> SimplePolynomial.create("a_" + f.getName() + "," + i))
                             .toList()
             );
 
-            List<SMTLIBIntValue> summands = new LinkedList<>();
-            summands.add(SMTLIBIntConstant.create(BigInteger.ONE));
+            var result = new LinearPolynomial(coefficients.getFirst(), new LinkedHashMap<>());
 
             for (int i = 0; i < functionApplication.getArity(); i++) {
-                var functionCoefficient = cachedVariables.get(i);
+                var functionCoefficient = coefficients.get(i+1);
                 var argumentCoefficient = encodeTerm(functionApplication.getArgument(i));
-                summands.add(SMTLIBIntMult.create(List.of(functionCoefficient, argumentCoefficient)));
+                result = result.plus(argumentCoefficient.times(functionCoefficient));
             }
 
-            return SMTLIBIntPlus.create(summands);
+            return result;
         }
 
         private Set<Rule> computeUsableRules(Set<Rule> rules, TRSTerm term) {
             if (!(term instanceof TRSFunctionApplication f))
                 return Collections.emptySet();
 
+            var definedSymbols = ImmutableCreator.create(new IncrementalRuleMap(rules).getDefinedSymbols());
             Set<Rule> usableRules = new HashSet<>();
-            Set<Rule> unusableRules = new HashSet<>();
+            Set<Rule> unusableRules = new HashSet<>(rules);
             var fng = new FreshNameGenerator(f.getVariables(), FreshNameGenerator.VARIABLES);
 
-            computeUsableRulesSingleStep(ImmutableCreator.create(rules), f, usableRules, unusableRules, fng);
+            Deque<TRSTerm> worklist = new ArrayDeque<>();
+            worklist.add(term);
+            Set<TRSTerm> scanned = new HashSet<>();
 
-            // Only currently unused rules can become used
-            boolean anyRuleAdded = false;
-            do {
-                ImmutableSet<Rule> currentUnusableRules = ImmutableCreator.create(new HashSet<>(unusableRules));
-                for (var rule : currentUnusableRules) {
-                    if (!(rule.getRight() instanceof TRSFunctionApplication g))
-                        break;
-                    anyRuleAdded = computeUsableRulesSingleStep(currentUnusableRules, g, usableRules, unusableRules, fng);
-                    if (anyRuleAdded)
-                        break;
-                }
-            } while (anyRuleAdded);
+            while (!worklist.isEmpty()) {
+                TRSTerm current = worklist.poll();
+                if (!scanned.add(current))
+                    continue;
 
-            return usableRules;
-        }
+                Set<TRSFunctionApplication> subterms = current.getNonVariableSubTerms();
 
-        private static boolean computeUsableRulesSingleStep(ImmutableSet<Rule> currentlyUnusedRules, TRSFunctionApplication f, Set<Rule> usableRules, Set<Rule> unusableRules, FreshNameGenerator fng) {
-            boolean anyRuleAdded = false;
-            for (var rule : currentlyUnusedRules) {
-                var tcapArgs = f.getArguments().stream().map(arg -> arg.tcap(ImmutableCreator.create(arg.getFunctionSymbols()), fng)).toList();
-                var fPrime = TRSTerm.createFunctionApplication(f.getFunctionSymbol(), tcapArgs);
-                if (fPrime.unifies(rule.getLeft()) && usableRules.add(rule)) {
-                    unusableRules.remove(rule);
-                    anyRuleAdded = true;
-                } else {
-                    unusableRules.add(rule);
+                for (var sub : subterms) {
+                    var cappedArgs = sub.getArguments().stream()
+                            .map(arg -> arg.tcap(definedSymbols, fng))
+                            .toList();
+                    var capped = TRSTerm.createFunctionApplication(sub.getFunctionSymbol(), cappedArgs);
+
+                    for (Iterator<Rule> iterator = unusableRules.iterator(); iterator.hasNext(); ) {
+                        Rule rule = iterator.next();
+                        if (capped.unifies(rule.getLeft())) {
+                            iterator.remove();
+                            usableRules.add(rule);
+                            worklist.add(rule.getRight());
+                        }
+                    }
                 }
             }
 
-            return anyRuleAdded;
+            return usableRules;
         }
     }
 }
