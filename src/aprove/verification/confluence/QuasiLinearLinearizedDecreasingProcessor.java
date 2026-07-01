@@ -90,26 +90,34 @@ public class QuasiLinearLinearizedDecreasingProcessor implements Processor {
         private final List<Rule> rules;
         private final Map<FunctionSymbol, NestedSort> functionSymbolSortAssignment;
         private final Set<Rule> nonLinearRules;
-        private final Set<Label> nonLinearRuleLabels;
         private final Map<Rule, Label> ruleLabels;
+        private final Map<Label, Set<Label>> ruleLabelClosure;
         private final FormulaFactory<Diophantine> ff = NonCountingCircuitFactory.create(SplitMode.FLATTEN, SplitMode.LEFT_COMB);
 
         QuasiLinearDecreasingProcessorState(ConfTRSProblem confTRSProblem, Abortion aborter) {
             this.aborter = aborter;
             this.rules = new ArrayList<>(confTRSProblem.getRules());
+            ruleLabels = confTRSProblem.getRules().stream().collect(Collectors.toMap(r -> r, r -> new Label(SimplePolynomial.create("w" + rules.indexOf(r)))));
+            // Rename the variables of all rules so that V(r) is pairwise disjunct for all rules r
             var renamedRules = renameRules(confTRSProblem.getRules());
-            var sortAssignment = calculateMaximallyDistinctSortAssignment(renamedRules.getKey(), renamedRules.getValue());
+            var nonLinearVariablesForRule = computeNonLinearVariablesForRule(renamedRules.getValue());
+            nonLinearRules = nonLinearVariablesForRule.entrySet().stream().filter(entry -> entry.getValue().size() > 1).map(Map.Entry::getKey).collect(Collectors.toSet());
+            var sortAssignment = computeMaximallyDistinctSortAssignment(renamedRules.getKey(), renamedRules.getValue());
             var variableSortAssignment = sortAssignment.getKey();
             functionSymbolSortAssignment = sortAssignment.getValue();
-            var nonLinearVariables = collectNonLinearVariables(renamedRules.getValue());
-            var nonLinearSorts = nonLinearVariables.stream().map(variableSortAssignment::get).collect(Collectors.toSet());
-            var nonLinearSortsClosure = calculateSubtermSortRelationClosure(nonLinearSorts, functionSymbolSortAssignment);
-            ruleLabels = confTRSProblem.getRules().stream().collect(Collectors.toMap(r -> r, r -> new Label(SimplePolynomial.create("w" + rules.indexOf(r)))));
-            nonLinearRules = confTRSProblem.getRules()
-                    .stream()
-                    .filter(rule -> nonLinearSortsClosure.contains(functionSymbolSortAssignment.get(rule.getRootSymbol()).functionSymbolSort()))
-                    .collect(Collectors.toSet());
-            nonLinearRuleLabels = nonLinearRules.stream().map(ruleLabels::get).collect(Collectors.toSet());
+            ruleLabelClosure = new LinkedHashMap<>();
+            for (var entry : nonLinearVariablesForRule.entrySet()) {
+                var closure = new LinkedHashSet<Label>();
+                var nonLinearVariableSorts = entry.getValue().stream().map(variableSortAssignment::get).collect(Collectors.toSet());
+                var subtermClosure = computeSubtermSortRelationClosure(nonLinearVariableSorts, functionSymbolSortAssignment);
+                for (Rule rule : rules) {
+                    var lhsSort = functionSymbolSortAssignment.get(rule.getRootSymbol()).functionSymbolSort();
+                    if (subtermClosure.contains(lhsSort))
+                        closure.add(ruleLabels.get(rule));
+                }
+
+                ruleLabelClosure.put(ruleLabels.get(entry.getKey()), closure);
+            }
         }
 
         public Set<Rule> getNonLinearRules() {
@@ -133,8 +141,7 @@ public class QuasiLinearLinearizedDecreasingProcessor implements Processor {
             return new Pair<>(renamedVars, renamedRules);
         }
 
-        // TODO: Do this with UnionFind data structure
-        private Pair<Map<TRSVariable, Integer>, Map<FunctionSymbol, NestedSort>> calculateMaximallyDistinctSortAssignment(Set<TRSVariable> renamedVariables, Set<Rule> renamedRules) {
+        private Pair<Map<TRSVariable, Integer>, Map<FunctionSymbol, NestedSort>> computeMaximallyDistinctSortAssignment(Set<TRSVariable> renamedVariables, Set<Rule> renamedRules) {
             var functionSymbols = renamedRules.stream().flatMap(rule -> rule.getFunctionSymbols().stream()).collect(Collectors.toSet());
 
             AtomicInteger i = new AtomicInteger(0);
@@ -200,7 +207,7 @@ public class QuasiLinearLinearizedDecreasingProcessor implements Processor {
             }
         }
 
-        private static Set<Integer> calculateSubtermSortRelationClosure(Set<Integer> sorts, Map<FunctionSymbol, NestedSort> functionSymbolSorts) {
+        private static Set<Integer> computeSubtermSortRelationClosure(Set<Integer> sorts, Map<FunctionSymbol, NestedSort> functionSymbolSorts) {
             var closure = new HashSet<>(sorts);
             boolean changed = true;
             while (changed) {
@@ -216,9 +223,12 @@ public class QuasiLinearLinearizedDecreasingProcessor implements Processor {
             return closure;
         }
 
-        private static Set<TRSVariable> collectNonLinearVariables(Set<Rule> rules) {
-            return rules.stream()
-                    .flatMap(rule -> Stream.of(rule.getLeft(), rule.getRight()))
+        private static Map<Rule, Set<TRSVariable>> computeNonLinearVariablesForRule(Set<Rule> rules) {
+            return rules.stream().collect(Collectors.toMap(r -> r, QuasiLinearDecreasingProcessorState::computeNonLinearVariablesForRule));
+        }
+
+        private static Set<TRSVariable> computeNonLinearVariablesForRule(Rule rule) {
+            return Stream.of(rule.getLeft(), rule.getRight())
                     .flatMap(term -> term.getVariableCount()
                             .entrySet()
                             .stream()
@@ -260,23 +270,29 @@ public class QuasiLinearLinearizedDecreasingProcessor implements Processor {
         }
 
         // Label alpha is greater than all labels in labelsBelow
-        private Formula<Diophantine> buildAllLessThan(Label alpha, List<Label> labelsBelow) {
+        private Formula<Diophantine> buildAllLessThan(Label alpha, Collection<Label> labelsBelow) {
             return ff.buildAnd(labelsBelow.stream().map(l -> buildGreaterThan(alpha, l)).toList());
         }
 
         // Every label in "labelsBelowEither" is below alpha or below beta
-        private Formula<Diophantine> buildAllLessThanEither(Label alpha, Label beta, List<Label> labelsBelowEither) {
+        private Formula<Diophantine> buildAllLessThanEither(Label alpha, Label beta, Collection<Label> labelsBelowEither) {
             return ff.buildAnd(labelsBelowEither.stream().map(l -> ff.buildOr(buildGreaterThan(alpha, l), buildGreaterThan(beta, l))).toList());
         }
 
-        // R_nl(labelsBelow) < alpha (just filter out linear rules)
-        private Formula<Diophantine> buildNonLinearAllLessThan(Label alpha, List<Label> labelsBelow) {
-            return buildAllLessThan(alpha, labelsBelow.stream().filter(nonLinearRuleLabels::contains).toList());
+        private Set<Label> getNonLinearRuleLabelsClosure(List<Label> labels) {
+            return labels.stream()
+                    .flatMap(label -> ruleLabelClosure.getOrDefault(label, Set.of()).stream())
+                    .collect(Collectors.toSet());
         }
 
-        // R_nl(labelsBelowEither) < alpha ∨ beta (just filter out linear rules)
+        // R_nl(labelsBelow) < alpha
+        private Formula<Diophantine> buildNonLinearAllLessThan(Label alpha, List<Label> labelsBelow) {
+            return buildAllLessThan(alpha, getNonLinearRuleLabelsClosure(labelsBelow));
+        }
+
+        // R_nl(labelsBelowEither) < alpha ∨ beta
         private Formula<Diophantine> buildNonLinearAllLessThanEither(Label alpha, Label beta, List<Label> labelsBelowEither) {
-            return buildAllLessThanEither(alpha, beta, labelsBelowEither.stream().filter(nonLinearRuleLabels::contains).toList());
+            return buildAllLessThanEither(alpha, beta, getNonLinearRuleLabelsClosure(labelsBelowEither));
         }
 
         // The conversion is fully below the two peaks
