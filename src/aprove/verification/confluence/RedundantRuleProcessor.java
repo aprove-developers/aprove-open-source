@@ -50,7 +50,7 @@ public class RedundantRuleProcessor implements Processor {
         public int ReachabilityLimit = 6;
     }
 
-    private static boolean canRuleBeSimulated(Map<FunctionSymbol, Set<Rule>> currentRuleMap, FreshNameGenerator fng, Rule rule) {
+    private static boolean canRuleBeSimulated(Map<FunctionSymbol, ? extends Set<Rule>> currentRuleMap, FreshNameGenerator fng, Rule rule) {
         return rule.getLeft().computePossibleRewrites(currentRuleMap, fng).stream().anyMatch(step -> step.substitutedTerm().equals(rule.getRight()));
     }
 
@@ -77,7 +77,7 @@ public class RedundantRuleProcessor implements Processor {
         // (rhs)
         Set<Rule> rhsRules = rules.stream()
                 .flatMap(r -> r.getRight()
-                        .rewrite(incrementalRuleMap.getRuleMap())
+                        .rewrite(incrementalRuleMap.toImmutable())
                         .stream()
                         .map(rewrite -> Rule.create(r.getLeft(), rewrite)))
                 .collect(Collectors.toSet());
@@ -87,7 +87,7 @@ public class RedundantRuleProcessor implements Processor {
         var fng = new FreshNameGenerator(incrementalRuleMap.getDefinedSymbols(), FreshNameGenerator.VARIABLES);
         rules.removeIf(rule -> {
             incrementalRuleMap.removeRule(rule);
-            var doRemove = canRuleBeSimulated(incrementalRuleMap.getRuleMap(), fng, rule);
+            var doRemove = canRuleBeSimulated(incrementalRuleMap.toImmutable(), fng, rule);
             if (!doRemove)
                 incrementalRuleMap.addRule(rule);
             return doRemove;
@@ -99,7 +99,7 @@ public class RedundantRuleProcessor implements Processor {
         // longer reach its right side, turning a non-confluent TRS into a confluent one.
         rules.removeIf(rule -> {
             incrementalRuleMap.removeRule(rule);
-            var joinTree = new TrsTermJoinTree(incrementalRuleMap.getRuleMap(), rule.getLeft(), rule.getRight());
+            var joinTree = new TrsTermJoinTree(incrementalRuleMap.toImmutable(), rule.getLeft(), rule.getRight());
             var result = joinTree.isRightTermReachable(arguments.ReachabilityLimit, aborter);
             var doRemove = result instanceof JoinableResult.Joinable;
             if (!doRemove)
