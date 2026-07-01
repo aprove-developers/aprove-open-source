@@ -32,7 +32,7 @@ public class CriticalPairs {
     private Collection<CriticalPairInfo> possibleNCRCritPairs;
 
     private final List<CriticalPairInfo> allFoundCriticalPairs = new ArrayList<>();
-    
+
     private final Map<CriticalPairInfo, Pair<ImmutableList<RewriteStep>, ImmutableList<RewriteStep>>> foundJoinable = new LinkedHashMap<>();
 
     private JoinableResult.WcrCounterExample counterExampleWCR;
@@ -42,7 +42,7 @@ public class CriticalPairs {
     private int limit;
 
     private YNM allStronglyJoinable = YNM.MAYBE;
-    
+
     private final Map<TRSTerm, ImmutableList<RewriteStep>> normalFormsReachable = new LinkedHashMap<>();
 
     public CriticalPairs(final Set<Rule> rls,
@@ -64,7 +64,7 @@ public class CriticalPairs {
     public JoinableResult.WcrCounterExample getCounterExampleWCR() {
         return this.counterExampleWCR;
     }
-    
+
     public JoinableResult.NonConfluent getCounterExampleCR() {
         return this.counterExampleCR;
     }
@@ -109,7 +109,7 @@ public class CriticalPairs {
         }
         return !this.gotNonTrivialRootCritpair;
     }
-    
+
     public synchronized Collection<CriticalPairInfo> getPossibleNCRCritPairs(Abortion aborter){
         if (this.possibleNCRCritPairs == null && !this.status.isDefinitiveAnswer()) {
             this.possibleNCRCritPairs = this.getAllFoundCriticalPairs(aborter).stream()
@@ -118,7 +118,7 @@ public class CriticalPairs {
         }
         return this.possibleNCRCritPairs;
     }
-    
+
     public Map<CriticalPairInfo, Pair<ImmutableList<RewriteStep>, ImmutableList<RewriteStep>>> getFoundJoinable() {
         return this.foundJoinable;
     }
@@ -135,7 +135,7 @@ public class CriticalPairs {
             // Already determined, do nothing.
             return;
         }
-        
+
         if(this.onlyTrivialCriticalPairs(aborter)) {
             this.allStronglyJoinable = YNM.YES;
             this.status = CPK.WCR_DONE;
@@ -144,7 +144,11 @@ public class CriticalPairs {
 
         // This call ensures this.allFoundCriticalPairs is populated.
         this.getNextCritPair(aborter, false);
-        
+
+        // Invalid root symbol
+        if (nonJoinableCritPairs == null)
+            return;
+
         Iterator<Pair<CriticalPairInfo, Integer>> iter = this.nonJoinableCritPairs.iterator();
         while(iter.hasNext()) {
             aborter.checkAbortion();
@@ -180,15 +184,15 @@ public class CriticalPairs {
         this.ensureStrongJoinabilityIsDetermined(aborter);
         return this.allStronglyJoinable;
     }
-    
+
     public synchronized CPK checkStatusWeak(final int limit, final Abortion aborter) throws AbortionException {
-        
+
         this.ensureStrongJoinabilityIsDetermined(aborter);
-        
+
         if(this.status.isAnyAnswer()) {
             return this.status;
         }
-        
+
         if (this.critPairIterator != null) {
             this.getNextCritPair(aborter, false);
         }
@@ -198,7 +202,7 @@ public class CriticalPairs {
         this.checkJoin(limit, aborter);
         return this.status;
     }
-    
+
     public synchronized CPK checkStatusWeak(final Abortion aborter) throws AbortionException {
         int limit = 8;
         CPK status = null;
@@ -210,7 +214,7 @@ public class CriticalPairs {
         }
         return status;
     }
-    
+
     public synchronized CPK checkStatusDefinitive(final Abortion aborter) throws AbortionException {
         int limit = 8;
         CPK status = null;
@@ -218,13 +222,13 @@ public class CriticalPairs {
             status = this.checkStatusDefinitive(limit, aborter);
             if(this.status.isDefinitiveAnswer())
                 return status;
-            
+
             limit *= 2;
         }
         return status;
     }
-    
-    
+
+
     public synchronized CPK checkStatusDefinitive(final int limit, final Abortion aborter) throws AbortionException {
         this.ensureStrongJoinabilityIsDetermined(aborter);
         if(this.status.isDefinitiveAnswer()) {
@@ -410,16 +414,16 @@ public class CriticalPairs {
             }
         }
     }
-    
+
     private static boolean CPKIsNCR(CPK cpk) {
         return cpk == CPK.NOTCR || cpk == CPK.NOTCR;
     }
-    
+
     private static boolean cpIsTrivial(CriticalPairInfo cpi)
     {
         return cpi.s().equals(cpi.t());
     }
-    
+
     private synchronized void checkNonConfluence(final int limit, final Abortion aborter) throws AbortionException {
         if(limit <= this.limit || CPKIsNCR(this.status)) {
             return ;
@@ -454,18 +458,18 @@ public class CriticalPairs {
             this.status = CPK.WCR_DONE;
         }
     }
-    
+
     private void handleNonConfluence(JoinableResult.NonConfluent result) {
         this.status = CPK.NOTCR;
         this.counterExampleCR = result;
     }
-    
+
     private void handleNonWCR(JoinableResult.WcrCounterExample result) {
         this.status = CPK.NOTWCR;
         if (this.counterExampleWCR == null)
             this.counterExampleWCR = result;
     }
-    
+
     private <E> void handleJO(CriticalPairInfo cpi, JoinableResult.Joinable result, Iterator<E> iter) {
         if(!this.foundJoinable.containsKey(cpi))
             this.foundJoinable.put(cpi, new Pair<>(result.leftSequence(), result.rightSequence()));
