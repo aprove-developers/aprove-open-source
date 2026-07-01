@@ -11,7 +11,6 @@ import aprove.strategies.Abortions.Abortion;
 import aprove.strategies.Abortions.AbortionException;
 import aprove.strategies.Annotations.ParamsViaArgumentObject;
 import aprove.strategies.ExecutableStrategies.RuntimeInformation;
-import aprove.strategies.ExecutableStrategies.Success;
 import aprove.verification.confluence.Utility.CPK;
 import aprove.verification.confluence.Utility.CriticalPairInfo;
 import aprove.verification.dpframework.BasicStructures.*;
@@ -45,12 +44,14 @@ public class QuasiLinearLinearizedDecreasingProcessor implements Processor {
     public Result process(BasicObligation obl, BasicObligationNode oblNode, Abortion aborter, RuntimeInformation rti) throws AbortionException {
         ConfTRSProblem confTRSProblem = (ConfTRSProblem) obl;
 
+        // First prove local confluence
         var criticalPairs = confTRSProblem.getCriticalPairs();
-        LocalConfluenceProcessor wcrProcessor = new LocalConfluenceProcessor();
-        var wcrResult = wcrProcessor.process(confTRSProblem, oblNode, aborter, rti);
         var status = criticalPairs.checkStatusWeak(arguments.WeakCRJoinLimit, aborter);
-        if (!(wcrResult.getStrategy() instanceof Success) || (status != CPK.WCR && status != CPK.WCR_DONE))
-            return wcrResult;
+
+        // Or fail with unsuccessful. Don't fail with an actual result, because, when using redundant rules, this is only sound, not complete.
+        // Therefore, the proof tree would terminate with MAYBE instead of continuing
+        if (status != CPK.WCR && status != CPK.WCR_DONE)
+            return ResultFactory.unsuccessful();
 
         QuasiLinearDecreasingProcessorState state = new QuasiLinearDecreasingProcessorState(confTRSProblem, aborter);
         Formula<Diophantine> constraints = state.buildConstraints(criticalPairs.getFoundJoinable());
@@ -73,7 +74,7 @@ public class QuasiLinearLinearizedDecreasingProcessor implements Processor {
 
     public static class Arguments {
         public SolverFactory Order;
-        public int WeakCRJoinLimit = 8;
+        public int WeakCRJoinLimit = 6;
     }
 
     record NestedSort(int functionSymbolSort, List<Integer> argumentSorts) {
