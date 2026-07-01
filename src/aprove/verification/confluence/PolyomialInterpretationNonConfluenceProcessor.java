@@ -168,7 +168,8 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
                     newCoefficientsForVariables.put(entry.getKey(), entry.getValue().minus(otherValue));
                 }
 
-                other.coefficientsForVariable.forEach(newCoefficientsForVariables::putIfAbsent);
+                other.coefficientsForVariable.forEach((variable, coefficient) ->
+                        newCoefficientsForVariables.putIfAbsent(variable, coefficient.negate()));
                 return new LinearPolynomial(newConstantPart, newCoefficientsForVariables);
             }
 
