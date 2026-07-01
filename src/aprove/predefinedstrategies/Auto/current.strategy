@@ -2124,6 +2124,7 @@ conf_trs_preprocess = RedundantRulesProcessor
 
 conf_trs_decreasing_diagram = DecreasingDiagramsRuleLabellingProcessor[Order = POLO[Degree = 1, Engine = SMTLIB]]
 conf_trs_interpretation_non_cr = InterpretationNonConfluenceProcessor[Order = POLO[Engine = SMTLIB]]
+conf_trs_quasilinear_decreasing = QuasiLinearLinearizedDecreasingnessProcessor[Order = POLO[Degree = 1, Engine = SMTLIB]]
 
 newmanlemma_solve = Solve(
             ConfNewmanProcessor : Any(
@@ -2132,9 +2133,14 @@ newmanlemma_solve = Solve(
             )
         )
 
+conf_trs_quasilinear_decreasing_solve = Solve(
+            conf_trs_quasilinear_decreasing : qtrs
+)
+
 conf_atomic_trs = First(
             conf_trs_preprocess : conf_trs_decreasing_diagram,
-            conf_trs_interpretation_non_cr
+            conf_trs_preprocess : conf_trs_quasilinear_decreasing_solve,
+            conf_trs_interpretation_non_cr,
             newmanlemma_solve,
             LimitedNotWCRProcessor,
             NonConfluenceProcessor

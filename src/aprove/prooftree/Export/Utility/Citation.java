@@ -92,7 +92,8 @@ public enum Citation {
     RV80,
     BN98,
     AOTO10, // see https://drops.dagstuhl.de/storage/00lipics/lipics-vol006-rta2010/LIPIcs.RTA.2010.7/LIPIcs.RTA.2010.7.pdf
-    NAGELE15 // see https://drops.dagstuhl.de/storage/00lipics/lipics-vol036-rta2015/LIPIcs.RTA.2015.257/LIPIcs.RTA.2015.257.pdf
+    NAGELE15, // see https://drops.dagstuhl.de/storage/00lipics/lipics-vol036-rta2015/LIPIcs.RTA.2015.257/LIPIcs.RTA.2015.257.pdf
+    AOTO_TOYAMA_UCHIMA14, // see https://www.nue.ie.niigata-u.ac.jp/~aoto/research/papers/conference/qldd.pdf
     ;
 
     @Override
