@@ -53,6 +53,9 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
         var confTrsProblem = (ConfTRSProblem) obl;
 
         var oneStepUnfolding = computeOneStepUnfolding(confTrsProblem.getRules());
+        if (oneStepUnfolding.size() > arguments.MaxNumberOfUnfoldedRules)
+            return ResultFactory.unsuccessful();
+
         var newConfTrsProblem = ConfTRSProblem.create(ImmutableCreator.create(oneStepUnfolding));
         var criticalPairs = newConfTrsProblem.getCriticalPairs().getAllFoundCriticalPairs(aborter)
                 .stream()
@@ -90,6 +93,7 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
     public static class Arguments {
         public SolverFactory Order;
         public int MaxNumberOfCriticalPairs = 100;
+        public int MaxNumberOfUnfoldedRules = 1000;
         public int Modulus = 3;
     }
 
