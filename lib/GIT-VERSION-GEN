@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Little helper script for benchmarking and git.
 # Pushes HEAD to aprove repository and adds a tag

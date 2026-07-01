@@ -26,3 +26,4 @@ GlobalSettings.java
 __pycache__
 **/__pycache__/
 **/*.pyc
+result
