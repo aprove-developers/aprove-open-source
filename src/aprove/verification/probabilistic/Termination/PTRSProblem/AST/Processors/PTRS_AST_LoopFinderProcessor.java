@@ -658,12 +658,7 @@ public class PTRS_AST_LoopFinderProcessor extends PTRS_AST_ProblemProcessor {
             if (!onlyOrtho) { // Count All (non-overlapping) Occurrences
                 return targetTerm.maxNMSound(baseLoopTerm, repeatingSubstitution).orElse(-1);
             } else { // Count Orthogonal
-                final int maxOM = targetTerm.maxOM(baseLoopTerm, repeatingSubstitution);
-                if (maxOM == 0) { // Check if the baseLoopTerm exists as subterm at all
-                    return targetTerm.hasPatternOcc(baseLoopTerm, repeatingSubstitution) ? 0 : -1;
-                } else {
-                    return maxOM;
-                }
+                return targetTerm.maxOMSound(baseLoopTerm, repeatingSubstitution).orElse(-1);
             }
         }
     }
