@@ -476,7 +476,7 @@ public class PTRS_AST_LoopFinderProcessor extends PTRS_AST_ProblemProcessor {
 
                                 BigFraction countAll = BigFraction.MINUS_ONE;
                                 //Check if we are allowed to use all occurrences
-                                if (loopTerm.isLinear() || child.containsVariablesAsOften(loopTerm.getVariablePositions())) {
+                                if (allowNonOverlappingCount(loopTerm, child, leaf.getValue().getZ().get(i).getX(), leaf.getValue().getZ().get(i).getY())) {
                                     countAll = fraction.multiply(
                                         countMatches(child, leaf.getValue().getZ().get(i).getX(), leaf.getValue().getZ().get(i).getY(), false));
                                 }
@@ -577,7 +577,7 @@ public class PTRS_AST_LoopFinderProcessor extends PTRS_AST_ProblemProcessor {
                     for (int i = 0; i < leaf.x.getValue().getZ().size(); i++) {
                         BigFraction countAll = BigFraction.MINUS_ONE;
                         //Check if we are allowed to use all occurrences
-                        if (loopTerm.isLinear() || child.containsVariablesAsOften(loopTerm.getVariablePositions())) {
+                        if (allowNonOverlappingCount(loopTerm, child, leaf.x.getValue().getZ().get(i).getX(), leaf.x.getValue().getZ().get(i).getY())) {
                             countAll = fraction.multiply(
                                 countMatches(child, leaf.x.getValue().getZ().get(i).getX(), leaf.x.getValue().getZ().get(i).getY(), false));
                         }
@@ -613,32 +613,58 @@ public class PTRS_AST_LoopFinderProcessor extends PTRS_AST_ProblemProcessor {
      * @param repeatingSubstitution the substitution repeatedly applied to baseLoopTerm
      * @return the number of successful matches, or -1 if no match occurs and a substitution is provided
      */
+    /**
+     * Cache for the (potentially expensive) linear pattern term check, keyed by base term and
+     * pumping substitution. The result only depends on the pattern term itself, so it is stable
+     * across all children/leaves that share the same base term and substitution.
+     */
+    private final Map<Pair<TRSTerm, TRSSubstitution>, Boolean> linearPatternCache = new HashMap<>();
+
+    
+    /**
+     * Decides whether we may count non-overlapping (rather than only orthogonal) occurrences of the
+     * base term {@code base} (with optional pumping substitution {@code sub}) in the child term.
+     */
+    private boolean allowNonOverlappingCount(final TRSTerm loopTerm, final TRSTerm child, final TRSTerm base, final TRSSubstitution sub) {
+        if (sub == null) { // Terms Occurrences
+            if (loopTerm.isLinear()) { // Linear
+                return true;
+            }
+            if (child.containsVariablesAsOften(loopTerm.getVariablePositions())) { // NVD
+                return true;
+            }
+            return false;
+        } else { // Pattern Terms Occurrences
+            if (this.linearPatternCache.computeIfAbsent(new Pair<>(base, sub), p -> p.x.isLinearPatternTerm(p.y))) { // Linear
+                return true;
+            }
+            if (child.containsVariablesAsOften(loopTerm.getVariablePositions())) { // NVD
+                return true;
+            }
+            return false;
+        }
+    }
+
     private int countMatches(final TRSTerm targetTerm, final TRSTerm baseLoopTerm, final TRSSubstitution repeatingSubstitution, final boolean onlyOrtho) {
         if (baseLoopTerm == null) {
             return 0;
         } else if (repeatingSubstitution == null) {
-            if (!onlyOrtho) { // Count All Occurrences
+            if (!onlyOrtho) { // Count All (non-overlapping) Occurrences
                 return targetTerm.maxNO(baseLoopTerm);
             } else { // Count Orthogonal
                 return targetTerm.maxOO(baseLoopTerm);
             }
         } else {
-            // Currently, we can only handle orthogonal counting in the case of pattern terms
-            //            if (!onlyOrtho) { // Count All Occurrences
-            //                int maxNM = targetTerm.maxNM(baseLoopTerm, repeatingSubstitution);
-            //                if (maxNM == 0) { // Check if the baseLoopTerm exists as subterm at all
-            //                    return targetTerm.hasPatternOcc(baseLoopTerm, repeatingSubstitution) ? 0 : -1;
-            //                } else {
-            //                    return maxNM;
-            //                }
-            //            } else { // Count Orthogonal
-            final int maxOM = targetTerm.maxOM(baseLoopTerm, repeatingSubstitution);
-            if (maxOM == 0) { // Check if the baseLoopTerm exists as subterm at all
-                return targetTerm.hasPatternOcc(baseLoopTerm, repeatingSubstitution) ? 0 : -1;
-            } else {
-                return maxOM;
+            if (!onlyOrtho) { // Count All (non-overlapping) Occurrences
+                return targetTerm.maxNMSound(baseLoopTerm, repeatingSubstitution).orElse(-1);
+            } else { // Count Orthogonal
+                final int maxOM = targetTerm.maxOM(baseLoopTerm, repeatingSubstitution);
+                if (maxOM == 0) { // Check if the baseLoopTerm exists as subterm at all
+                    return targetTerm.hasPatternOcc(baseLoopTerm, repeatingSubstitution) ? 0 : -1;
+                } else {
+                    return maxOM;
+                }
             }
-            //            }
         }
     }
 
@@ -763,14 +789,25 @@ public class PTRS_AST_LoopFinderProcessor extends PTRS_AST_ProblemProcessor {
                 }
                 
             } else {
-                sb.append("We use [Thm.28] and count the pumping substitution:")
-                    .append(o.linebreak())
-                    .append(this.loopTree.getValue().getZ().get(this.disproveID).getY())
+                final TRSTerm patternBase = this.loopTree.getValue().getZ().get(this.disproveID).getX();
+                final TRSSubstitution patternSub = this.loopTree.getValue().getZ().get(this.disproveID).getY();
+                if (this.isMaxValueAllCounts && patternBase.isLinearPatternTerm(patternSub)) {
+                    //Non-overlapping counting for a linear pattern term
+                    sb.append("We use [Thm.linear-pattern] and count the pumping substitution non-overlapping for the linear pattern term:");
+                } else if (this.isMaxValueAllCounts) {
+                    //Non-overlapping counting in an NVD pattern tree
+                    sb.append("We use [Thm.nvd-pattern] on a pattern tree that is NVD and count the pumping substitution non-overlapping:");
+                } else {
+                    //Orthogonal counting
+                    sb.append("We use [Thm.28] and count the pumping substitution:");
+                }
+                sb.append(o.linebreak())
+                    .append(patternSub)
                     .append(o.linebreak())
                     .append(o.newline())
                     .append("Within the baseterm:")
                     .append(o.linebreak())
-                    .append(this.loopTree.getValue().getZ().get(this.disproveID).getX());
+                    .append(patternBase);
             }
 
             final List<Integer> path = new ArrayList<>();
