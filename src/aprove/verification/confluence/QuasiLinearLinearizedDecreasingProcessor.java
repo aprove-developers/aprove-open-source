@@ -297,7 +297,7 @@ public class QuasiLinearLinearizedDecreasingProcessor implements Processor {
         }
 
         // The conversion is fully below the two peaks
-        private Formula<Diophantine> makeCondH0V0(Label alpha, Label beta, List<Label> labelSequence) {
+        private Formula<Diophantine> buildAllBelowPeaks(Label alpha, Label beta, List<Label> labelSequence) {
             return ff.buildAnd(buildAllLessThanEither(alpha, beta, labelSequence), buildNonLinearAllLessThanEither(alpha, beta, labelSequence));
         }
 
@@ -319,10 +319,10 @@ public class QuasiLinearLinearizedDecreasingProcessor implements Processor {
             );
         }
 
-        private Formula<Diophantine> makeCondH0(Label alpha, Label beta, List<Label> leftRightRewriteSequences, int leftSequenceSize) {
+        private Formula<Diophantine> buildAllBelowPeaksOrPivotRightSequence(Label alpha, Label beta, List<Label> leftRightRewriteSequences, int leftSequenceSize) {
             List<Formula<Diophantine>> disjunctions = new ArrayList<>(leftRightRewriteSequences.size() + 1);
 
-            disjunctions.add(makeCondH0V0(alpha, beta, leftRightRewriteSequences));
+            disjunctions.add(buildAllBelowPeaks(alpha, beta, leftRightRewriteSequences));
 
             // Only move the pivot in the right rewrite sequence
             for (int pivot = leftSequenceSize; pivot < leftRightRewriteSequences.size(); pivot++)
@@ -360,7 +360,7 @@ public class QuasiLinearLinearizedDecreasingProcessor implements Processor {
             leftRightRewriteSequences.addAll(rightRewriteSequence);
 
             List<Formula<Diophantine>> disjunctions = new ArrayList<>(leftRewriteSequence.size() + 1);
-            disjunctions.add(makeCondH0(alpha, beta, leftRightRewriteSequences, leftRewriteSequence.size()));
+            disjunctions.add(buildAllBelowPeaksOrPivotRightSequence(alpha, beta, leftRightRewriteSequences, leftRewriteSequence.size()));
 
             for (int horizontalPivotIndex = 0; horizontalPivotIndex < leftRewriteSequence.size(); horizontalPivotIndex++)
                 disjunctions.add(buildPivotLeftSequence(alpha, beta, horizontalPivotIndex, leftRightRewriteSequences, leftRewriteSequence.size()));
