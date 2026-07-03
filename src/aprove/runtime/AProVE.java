@@ -67,6 +67,22 @@ public class AProVE implements ProveRunner {
         this.metadata = this.buildMetadata();
     }
 
+    public AProVE(final BasicObligation obligation, final Language language, final String name) {
+        this.input = null;
+        this.typedInput = new TypedInput(ModedType.createModedInput(language), obligation, null);
+        final BasicObligationNode node = new BasicObligationNode(obligation);
+        this.root = node;
+        this.positions = Collections.singletonList(node);
+        this.metadata = buildDirectMetadata(name);
+        Main.firstObligation = false;
+    }
+
+    private Map<Metadata, Object> buildDirectMetadata(final String name) {
+        final Map<Metadata, Object> result = new EnumMap<>(Metadata.class);
+        result.put(Metadata.PROBLEM_PATH_NAME, name);
+        return result;
+    }
+
     public StrategyProgram getEffectiveStrategy() {
         if (this.presetStrategy != null) {
             return this.presetStrategy;

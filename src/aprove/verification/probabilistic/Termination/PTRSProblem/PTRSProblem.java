@@ -223,7 +223,7 @@ public class PTRSProblem extends DefaultBasicObligation implements Immutable {
         }
         return QTRSProblem.create(ImmutableCreator.create(allNonProbLRules));
     }
-
+    
     public boolean isNonOverlapping() {
         return getCriticalPairs().isNonOverlapping(AbortionFactory.create());
     }
@@ -257,6 +257,10 @@ public class PTRSProblem extends DefaultBasicObligation implements Immutable {
             }
         }
         return true;
+    }
+    
+    public boolean isGround() {
+        return this.getVariables().isEmpty();
     }
 
     public boolean isVariableOccDecreasing() {

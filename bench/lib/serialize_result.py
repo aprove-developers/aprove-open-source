@@ -24,7 +24,7 @@ def _rel_path(root_prefix: Path, file_path: Path) -> str:
         return file_path.name
 
 
-def _append_summary(summary: Path, rel: str, first_line: str, result_path: str, input_path: str) -> None:
+def _append_summary(summary: Path, rel: str, first_line: str, result_path: str, input_path: str, time_ms: int | None = None) -> None:
     lock = summary.with_suffix(summary.suffix + ".lock")
     while True:
         try:
@@ -33,7 +33,7 @@ def _append_summary(summary: Path, rel: str, first_line: str, result_path: str, 
         except FileExistsError:
             time.sleep(0.01)
     try:
-        header = ["File", "Result", "FullResult", "InputPath"]
+        header = ["File", "Result", "FullResult", "InputPath", "Time_ms"]
         rows: list[list[str]] = []
         if summary.exists():
             with summary.open("r", encoding="utf-8", newline="") as fh:
@@ -44,7 +44,7 @@ def _append_summary(summary: Path, rel: str, first_line: str, result_path: str, 
 
         data_rows = rows[1:]
 
-        new_row = [rel, first_line, result_path, input_path]
+        new_row = [rel, first_line, result_path, input_path, str(time_ms) if time_ms is not None else ""]
 
         replaced = False
         for idx, row in enumerate(data_rows):
@@ -64,7 +64,7 @@ def _append_summary(summary: Path, rel: str, first_line: str, result_path: str, 
         lock.rmdir()
 
 
-def serialize(outdir: Path, root_prefix: Path, file_path: Path, content: str, raw_first_line: bool = False) -> None:
+def serialize(outdir: Path, root_prefix: Path, file_path: Path, content: str, raw_first_line: bool = False, time_ms: int | None = None) -> None:
     rel = _rel_path(root_prefix, file_path)
     results_dir = outdir / "results"
     outfile = results_dir / f"{rel}.out"
@@ -76,7 +76,7 @@ def serialize(outdir: Path, root_prefix: Path, file_path: Path, content: str, ra
     if not raw_first_line and first_line not in VALID_RESULTS:
         first_line = "ERROR"
     summary = outdir / "summary.csv"
-    _append_summary(summary, rel, first_line, f"results/{rel}.out", str(file_path))
+    _append_summary(summary, rel, first_line, f"results/{rel}.out", str(file_path), time_ms=time_ms)
 
 
 _POSITIVE = {"YES", "NO", "AST", "SAST"}
@@ -107,7 +107,7 @@ def _conflict_type(old: str, new: str) -> str | None:
     return None
 
 
-def append_flat(csv_path: Path, problem: str, result: str, timeout: str, category: str, commit_id: str) -> None:
+def append_flat(csv_path: Path, problem: str, result: str, timeout: str, category: str, commit_id: str, time_ms: int | None = None) -> None:
     """Write a result row to the flat benchmark CSV.
 
     Deduplication by (Problem, Category):
@@ -122,7 +122,7 @@ def append_flat(csv_path: Path, problem: str, result: str, timeout: str, categor
         except FileExistsError:
             time.sleep(0.01)
     try:
-        header = ["Timestamp", "Problem", "Result", "Timeout", "Category", "CommitID", "Conflict"]
+        header = ["Timestamp", "Problem", "Result", "Timeout", "Category", "CommitID", "Conflict", "Time_ms"]
         COL_PROBLEM, COL_RESULT, COL_CATEGORY, COL_CONFLICT = 1, 2, 4, 6
 
         data_rows: list[list[str]] = []
@@ -130,8 +130,11 @@ def append_flat(csv_path: Path, problem: str, result: str, timeout: str, categor
             with csv_path.open("r", encoding="utf-8", newline="") as fh:
                 rows = list(csv.reader(fh, delimiter=";"))
             data_rows = rows[1:] if rows and rows[0] and rows[0][0] == "Timestamp" else rows
-            # Pad rows that predate the Conflict column
-            data_rows = [r + ["NONE"] * (len(header) - len(r)) for r in data_rows]
+            # Pad rows that predate the Conflict column (6→7) and/or Time_ms column (7→8)
+            data_rows = [
+                r + ["NONE"] * max(0, 7 - len(r)) + [""] * max(0, 8 - max(7, len(r)))
+                for r in data_rows
+            ]
 
         new_row = [
             datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
@@ -141,6 +144,7 @@ def append_flat(csv_path: Path, problem: str, result: str, timeout: str, categor
             category,
             commit_id,
             "NONE",
+            str(time_ms) if time_ms is not None else "",
         ]
 
         matches = [(i, r) for i, r in enumerate(data_rows)
@@ -152,12 +156,27 @@ def append_flat(csv_path: Path, problem: str, result: str, timeout: str, categor
                 # Tag all existing matching rows with the conflict type (upgrade NONE if needed)
                 for i, r in matches:
                     if r[COL_CONFLICT] == "NONE":
-                        data_rows[i] = r[:COL_CONFLICT] + [conflict]
+                        data_rows[i] = r[:COL_CONFLICT] + [conflict] + r[COL_CONFLICT + 1:]
                 new_row[COL_CONFLICT] = conflict
                 data_rows.append(new_row)
             else:
-                # No conflict: replace all matching rows with the new one
-                data_rows = [new_row if (len(r) > COL_CATEGORY and r[COL_PROBLEM] == problem and r[COL_CATEGORY] == category) else r for r in data_rows]
+                # No result conflict: check for runtime improvement
+                faster = False
+                if time_ms is not None:
+                    try:
+                        old_ms = int(matches[-1][1][7] if len(matches[-1][1]) > 7 else "")
+                        if time_ms < old_ms:
+                            faster = True
+                    except (ValueError, TypeError):
+                        pass
+                if faster:
+                    # Keep existing rows, append new row tagged FASTER
+                    new_row[COL_CONFLICT] = "FASTER"
+                    data_rows.append(new_row)
+                else:
+                    # No change: drop all matching rows, append the new one
+                    data_rows = [r for r in data_rows if not (len(r) > COL_CATEGORY and r[COL_PROBLEM] == problem and r[COL_CATEGORY] == category)]
+                    data_rows.append(new_row)
         else:
             data_rows.append(new_row)
 

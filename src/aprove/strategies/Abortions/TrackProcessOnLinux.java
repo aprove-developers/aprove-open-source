@@ -60,6 +60,7 @@ class TrackProcessOnLinux extends TrackProcess {
             this.updateTime(newTime * TrackProcessOnLinux.MILLIS_PER_JIFFIE);
         } catch (final IOException e) {
             // Hmm... most likely, the process died...
+            ProcessRegistry.deregister(this.process);
             TimeRefresher.deregister(this);
             return;
         }
@@ -67,6 +68,7 @@ class TrackProcessOnLinux extends TrackProcess {
 
     @Override
     public void kill() {
+        ProcessRegistry.deregister(this.process);
         if (this.process != null) {
             this.process.destroy();
         } else {

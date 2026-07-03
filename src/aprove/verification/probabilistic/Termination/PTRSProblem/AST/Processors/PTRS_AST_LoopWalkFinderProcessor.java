@@ -62,7 +62,7 @@ public class PTRS_AST_LoopWalkFinderProcessor extends PTRS_AST_ProblemProcessor 
     public Result processPTRSProblem(final PTRSProblem ptrs, final Abortion aborter) throws AbortionException {
 
         //Create SymbolTransitionGraph
-        final SymbolTransitionGraph stg = new SymbolTransitionGraph(ptrs);
+        final SymbolTransitionGraph stg = new SymbolTransitionGraph(ptrs.getPR(), ptrs.getSignature());
 
         //List for all already found trees
         final List<NonTerminationProbProofNode> trees = new ArrayList<>();

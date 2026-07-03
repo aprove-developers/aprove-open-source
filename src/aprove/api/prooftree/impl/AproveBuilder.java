@@ -7,12 +7,21 @@ import aprove.api.impl.*;
 import aprove.api.prooftree.*;
 import aprove.cli.*;
 import aprove.exit.*;
+import aprove.prooftree.Obligations.*;
 import aprove.runtime.*;
 import aprove.strategies.Parameters.*;
 import aprove.verification.oldframework.Input.*;
 
 public enum AproveBuilder {
     ;
+
+    @FunctionalInterface
+    public interface AProVEFactory {
+        AProVE create(Optional<Path> onlineCertificationPath,
+                      boolean onlyCertifiableTechniquesIfPossible,
+                      Optional<Strategy> strategy,
+                      Timeout timeout) throws SourceException, KillAproveException, IllegalArgumentException;
+    }
 
     public static AProVE createAprove(AnalyzableProblemInputImpl analyzableProblemInput,
                                       Optional<Path> onlineCertificationPath,
@@ -24,15 +33,36 @@ public enum AproveBuilder {
         CertificationHandler.onlineCertificationPath(onlineCertificationPath);
         CertificationHandler.setOnlineChecker(analyzableProblemInput.getProblemInput().getCPFOnlineCheckerPrefix());
         Input input = analyzableProblemInput.createInput();
-        return createAprove(input, onlyCertifiableTechniquesIfPossible, strategy, timeout);
+        return createAproveFromInput(input, onlyCertifiableTechniquesIfPossible, strategy, timeout);
     }
 
-    private static AProVE createAprove(Input input,
-                                       boolean onlyCertifiableTechniquesIfPossible,
-                                       Optional<Strategy> suggestedStrategy,
-                                       Timeout timeout) throws SourceException,
-                                                        KillAproveException,
-                                                        IllegalArgumentException {
+    public static AProVE createAproveFromObligation(BasicObligation obligation,
+                                                     Language language,
+                                                     String name,
+                                                     Optional<Path> onlineCertificationPath,
+                                                     boolean onlyCertifiableTechniquesIfPossible,
+                                                     Optional<Strategy> strategy,
+                                                     Timeout timeout) throws KillAproveException,
+                                                                      IllegalArgumentException {
+        CertificationHandler.onlineCertificationPath(onlineCertificationPath);
+        CertificationHandler.setOnlineChecker(name);
+        AProVE aprove = new AProVE(obligation, language, name);
+        StrategyProgram sp = getStrategy(aprove, onlyCertifiableTechniquesIfPossible, strategy);
+        if (sp != null) {
+            aprove.setStrategy(sp);
+        }
+        if (!timeout.isInfinite()) {
+            aprove.setTimeout(timeout.getDurationOrThrow());
+        }
+        return aprove;
+    }
+
+    private static AProVE createAproveFromInput(Input input,
+                                                boolean onlyCertifiableTechniquesIfPossible,
+                                                Optional<Strategy> suggestedStrategy,
+                                                Timeout timeout) throws SourceException,
+                                                                 KillAproveException,
+                                                                 IllegalArgumentException {
         AProVE aprove = new AProVE(input);
         StrategyProgram strategy = getStrategy(aprove, onlyCertifiableTechniquesIfPossible, suggestedStrategy);
         if (strategy != null) {

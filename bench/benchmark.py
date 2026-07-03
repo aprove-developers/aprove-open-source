@@ -25,7 +25,8 @@ KILL_GRACE = 5  # seconds beyond the jar's own timeout before the script kills t
 
 DEFAULTS: dict[str, str | Path | int | bool] = {
     "TIMEOUT": "30",
-    "JOBS": os.cpu_count() or 1,
+    "MAX_CONCURRENT_FILES": os.cpu_count() or 1,
+    "CORES_PER_FILE": 1,
     "EXTENSION": "ari",
     "RAW_RESULT": False,
     "LOCAL": False,
@@ -51,8 +52,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--java", dest="local_java", metavar="PATH",
                         help="Java executable to use with --local (default: java)")
     parser.add_argument("-o", "--outdir", type=Path, help="Output directory for per-file .out files and summary.csv. Optional if --flat-csv is set.")
-    parser.add_argument("-m", "--memory", help="Memory cap for container (e.g. 2g). Disables swap.")
-    parser.add_argument("-j", "--jobs", type=int, help=f"Parallelism (default: {DEFAULTS['JOBS']})")
+    parser.add_argument("-m", "--jvm-memory", dest="jvm_memory", help="Max JVM heap -Xmx (e.g. 6g), applied in both docker and local runs.")
+    parser.add_argument("-j", "--max-concurrent-files", dest="max_concurrent_files", type=int,
+                        help="CPU/core budget for parallel files; files run = MAX_CONCURRENT_FILES // CORES_PER_FILE "
+                             f"(default: {DEFAULTS['MAX_CONCURRENT_FILES']})")
+    parser.add_argument("--cores-per-file", dest="cores_per_file", type=int,
+                        help="CPU cores each file consumes; files run = MAX_CONCURRENT_FILES // CORES_PER_FILE "
+                             f"(default: {DEFAULTS['CORES_PER_FILE']})")
     parser.add_argument("-x", "--extension", help=f"File extension to search for (without dot) (default: {DEFAULTS['EXTENSION']})")
     parser.add_argument("-r", "--raw-result", action="store_true", default=argparse.SUPPRESS,
                         help="Record the raw first output line in the CSV instead of normalising to YES/NO/MAYBE/KILLED/ERROR. "
@@ -70,8 +76,13 @@ def parse_args() -> argparse.Namespace:
                         help="Randomly sample N files from the (filtered) problem set.")
     parser.add_argument("--sample-pct", type=int, metavar="PCT",
                         help="Randomly sample PCT%% of the (filtered) problem set (1-100). Ignored if --sample is set.")
+    parser.add_argument("--seed", type=int, metavar="SEED",
+                        help="Random seed for --sample / --sample-pct (for reproducibility).")
     parser.add_argument("--runall", type=Path, metavar="DIR",
                         help="Run every *.toml config found in DIR, forwarding all other flags to each run.")
+    parser.add_argument("--clean-conflicts", action="store_true", default=argparse.SUPPRESS,
+                        help="Remove all conflict rows from --flat-csv, keeping only the most recent row per "
+                             "(Problem, Category) with Conflict=NONE. Requires --flat-csv. Does not run benchmarks.")
     parser.add_argument("--cert", action="store_true", default=argparse.SUPPRESS,
                         help="Pass --cert to the solver, requesting CPF certificate output.")
     return parser.parse_args()
@@ -103,8 +114,9 @@ def build_config(cli: argparse.Namespace) -> dict[str, str | Path]:
         ("IMAGE", "image"),
         ("APROVE_JAR", "aprove_jar"),
         ("OUTDIR", "outdir"),
-        ("MEMORY", "memory"),
-        ("JOBS", "jobs"),
+        ("JVM_MEMORY", "jvm_memory"),
+        ("MAX_CONCURRENT_FILES", "max_concurrent_files"),
+        ("CORES_PER_FILE", "cores_per_file"),
         ("EXTENSION", "extension"),
         ("RAW_RESULT", "raw_result"),
         ("FLAT_CSV", "flat_csv"),
@@ -112,6 +124,7 @@ def build_config(cli: argparse.Namespace) -> dict[str, str | Path]:
         ("RERUN", "rerun"),
         ("SAMPLE", "sample"),
         ("SAMPLE_PCT", "sample_pct"),
+        ("SEED", "seed"),
         ("LOCAL", "local"),
         ("LOCAL_JAVA", "local_java"),
         ("CERT", "cert"),
@@ -174,7 +187,7 @@ def _docker_kill(cid_file: Path) -> None:
         pass
 
 
-def _maybe_append_flat(cfg: dict[str, str | Path], file_path: Path, root: Path, result: str) -> None:
+def _maybe_append_flat(cfg: dict[str, str | Path], file_path: Path, root: Path, result: str, time_ms: int | None = None) -> None:
     flat_csv = cfg.get("FLAT_CSV")
     if not flat_csv:
         return
@@ -189,12 +202,13 @@ def _maybe_append_flat(cfg: dict[str, str | Path], file_path: Path, root: Path, 
         timeout=str(cfg.get("TIMEOUT", "")),
         category=str(cfg.get("CATEGORY", "")),
         commit_id=str(cfg.get("COMMIT_ID", "unknown")),
+        time_ms=time_ms,
     )
 
 
-def run_file(cfg: dict[str, str | Path], file_path: Path, root: Path, outdir: Path, mem_flags: list[str]) -> tuple[Path, str, str]:
+def run_file(cfg: dict[str, str | Path], file_path: Path, root: Path, outdir: Path, mem_flags: list[str]) -> tuple[Path, str, str, int | None]:
     if STOP_EVENT.is_set():
-        return file_path, "", "cancelled"
+        return file_path, "", "cancelled", None
     clean_file = Path(str(file_path)).as_posix().replace("//", "/")
     cid_file = Path(tempfile.mktemp(suffix=".cid", prefix="aprove_"))
     cmd = [
@@ -203,6 +217,7 @@ def run_file(cfg: dict[str, str | Path], file_path: Path, root: Path, outdir: Pa
         "--rm",
         "--cidfile", str(cid_file),
         *mem_flags,
+        *(["-e", f"JVM_MEMORY={cfg['JVM_MEMORY']}"] if cfg.get("JVM_MEMORY") else []),
         "-v",
         f"{cfg['FOLDER']}:{cfg['FOLDER']}",
         cfg["IMAGE"],
@@ -212,7 +227,8 @@ def run_file(cfg: dict[str, str | Path], file_path: Path, root: Path, outdir: Pa
         clean_file,
     ]
     try:
-        deadline = time.monotonic() + int(cfg["TIMEOUT"]) + KILL_GRACE
+        t_start = time.monotonic()
+        deadline = t_start + int(cfg["TIMEOUT"]) + KILL_GRACE
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, preexec_fn=os.setsid if hasattr(os, "setsid") else None)
         killed_by_script = False
         try:
@@ -229,7 +245,7 @@ def run_file(cfg: dict[str, str | Path], file_path: Path, root: Path, outdir: Pa
                         except subprocess.TimeoutExpired:
                             proc.kill()
                             stdout, stderr = proc.communicate()
-                        return file_path, stdout or "", "cancelled"
+                        return file_path, stdout or "", "cancelled", None
                     if time.monotonic() >= deadline:
                         _docker_kill(cid_file)
                         proc.kill()
@@ -238,35 +254,48 @@ def run_file(cfg: dict[str, str | Path], file_path: Path, root: Path, outdir: Pa
                         break
         finally:
             cid_file.unlink(missing_ok=True)
+        elapsed_ms = int((time.monotonic() - t_start) * 1000)
         output = stdout or ""
         if killed_by_script:
             if outdir:
-                serialize_result.serialize(outdir, root, file_path, "KILLED", False)
-            _maybe_append_flat(cfg, file_path, root, "KILLED")
-            return file_path, "KILLED", ""
+                serialize_result.serialize(outdir, root, file_path, "KILLED", False, elapsed_ms)
+            _maybe_append_flat(cfg, file_path, root, "KILLED", elapsed_ms)
+            return file_path, "KILLED", "", elapsed_ms
         if stderr and outdir:
             (outdir / "error.log").open("a", encoding="utf-8").write(f"=== {datetime.datetime.now().isoformat(timespec='seconds')} {clean_file} ===\n{stderr}\n\n")
+        if not output.strip():
+            # No solver output -> crash or OOM-kill (e.g. docker exit 137), not a
+            # timeout (those are KILLED above). Record ERROR, never a blank result.
+            if outdir:
+                (outdir / "error.log").open("a", encoding="utf-8").write(
+                    f"=== {datetime.datetime.now().isoformat(timespec='seconds')} {clean_file} "
+                    f"exited {proc.returncode} with no output (treated as ERROR) ===\n\n")
+                serialize_result.serialize(outdir, root, file_path, "ERROR", False, elapsed_ms)
+            _maybe_append_flat(cfg, file_path, root, "ERROR", elapsed_ms)
+            return file_path, "ERROR", "", elapsed_ms
     except Exception as exc:  # noqa: BLE001
-        return file_path, "", f"error invoking docker: {exc}"
+        return file_path, "", f"error invoking docker: {exc}", None
 
     raw_first_line = bool(cfg.get("RAW_RESULT", False))
     if outdir:
-        serialize_result.serialize(outdir, root, file_path, output, raw_first_line)
+        serialize_result.serialize(outdir, root, file_path, output, raw_first_line, elapsed_ms)
     first_line = output.splitlines()[0] if output else ""
     normalised = first_line if (raw_first_line or first_line in serialize_result.VALID_RESULTS) else "ERROR"
-    _maybe_append_flat(cfg, file_path, root, normalised)
-    return file_path, output, ""
+    _maybe_append_flat(cfg, file_path, root, normalised, elapsed_ms)
+    return file_path, output, "", elapsed_ms
 
 
-def run_file_local(cfg: dict[str, str | Path], file_path: Path, root: Path, outdir: Path) -> tuple[Path, str, str]:
+def run_file_local(cfg: dict[str, str | Path], file_path: Path, root: Path, outdir: Path) -> tuple[Path, str, str, int | None]:
     if STOP_EVENT.is_set():
-        return file_path, "", "cancelled"
+        return file_path, "", "cancelled", None
     clean_file = str(file_path)
     solver = Path(__file__).resolve().parent / "solver"
     env = os.environ.copy()
     env["APROVE"] = str(cfg["APROVE_JAR"])
     env["JAVA"] = str(cfg.get("LOCAL_JAVA", "java"))
     env["SOLVER_ROOT"] = str(Path(__file__).resolve().parent)
+    if cfg.get("JVM_MEMORY"):
+        env["JVM_MEMORY"] = str(cfg["JVM_MEMORY"])
     cmd = [
         sys.executable, str(solver),
         f"--timeout={cfg['TIMEOUT']}",
@@ -275,7 +304,8 @@ def run_file_local(cfg: dict[str, str | Path], file_path: Path, root: Path, outd
         clean_file,
     ]
     try:
-        deadline = time.monotonic() + int(cfg["TIMEOUT"]) + KILL_GRACE
+        t_start = time.monotonic()
+        deadline = t_start + int(cfg["TIMEOUT"]) + KILL_GRACE
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                                 env=env, preexec_fn=os.setsid if hasattr(os, "setsid") else None)
         pgid = os.getpgid(proc.pid) if hasattr(os, "getpgid") else None
@@ -295,7 +325,7 @@ def run_file_local(cfg: dict[str, str | Path], file_path: Path, root: Path, outd
                         except subprocess.TimeoutExpired:
                             proc.kill()
                             stdout, stderr = proc.communicate()
-                        return file_path, stdout or "", "cancelled"
+                        return file_path, stdout or "", "cancelled", None
                     if time.monotonic() >= deadline:
                         if pgid is not None:
                             _kill_pgroup(pgid)
@@ -306,24 +336,35 @@ def run_file_local(cfg: dict[str, str | Path], file_path: Path, root: Path, outd
         finally:
             if pgid is not None:
                 _kill_pgroup(pgid)
+            elapsed_ms = int((time.monotonic() - t_start) * 1000)
         output = stdout or ""
         if killed_by_script:
             if outdir:
-                serialize_result.serialize(outdir, root, file_path, "KILLED", False)
-            _maybe_append_flat(cfg, file_path, root, "KILLED")
-            return file_path, "KILLED", ""
+                serialize_result.serialize(outdir, root, file_path, "KILLED", False, elapsed_ms)
+            _maybe_append_flat(cfg, file_path, root, "KILLED", elapsed_ms)
+            return file_path, "KILLED", "", elapsed_ms
         if stderr and outdir:
             (outdir / "error.log").open("a", encoding="utf-8").write(f"=== {datetime.datetime.now().isoformat(timespec='seconds')} {clean_file} ===\n{stderr}\n\n")
+        if not output.strip():
+            # No solver output -> crash or OOM-kill, not a timeout (those are
+            # KILLED above). Record ERROR, never a blank result.
+            if outdir:
+                (outdir / "error.log").open("a", encoding="utf-8").write(
+                    f"=== {datetime.datetime.now().isoformat(timespec='seconds')} {clean_file} "
+                    f"exited {proc.returncode} with no output (treated as ERROR) ===\n\n")
+                serialize_result.serialize(outdir, root, file_path, "ERROR", False, elapsed_ms)
+            _maybe_append_flat(cfg, file_path, root, "ERROR", elapsed_ms)
+            return file_path, "ERROR", "", elapsed_ms
     except Exception as exc:  # noqa: BLE001
-        return file_path, "", f"error invoking solver: {exc}"
+        return file_path, "", f"error invoking solver: {exc}", None
 
     raw_first_line = bool(cfg.get("RAW_RESULT", False))
     if outdir:
-        serialize_result.serialize(outdir, root, file_path, output, raw_first_line)
+        serialize_result.serialize(outdir, root, file_path, output, raw_first_line, elapsed_ms)
     first_line = output.splitlines()[0] if output else ""
     normalised = first_line if (raw_first_line or first_line in serialize_result.VALID_RESULTS) else "ERROR"
-    _maybe_append_flat(cfg, file_path, root, normalised)
-    return file_path, output, ""
+    _maybe_append_flat(cfg, file_path, root, normalised, elapsed_ms)
+    return file_path, output, "", elapsed_ms
 
 
 def monitor_progress(total: int, done_ref: dict[str, int], lock: threading.Lock) -> None:
@@ -382,7 +423,8 @@ def filter_files(files: list[Path], root: Path, outdir: Path | None, resume: boo
 _DEFAULT_RESULT_LABELS = ["YES", "NO", "MAYBE", "KILLED", "ERROR"]
 
 
-def _query_result_labels(cfg: dict, category: str, local: bool, extra_docker_flags: list[str]) -> list[str]:
+def _query_meta(cfg: dict, category: str, local: bool, extra_docker_flags: list[str]) -> dict:
+    """Ask the handler for its metadata (result labels, solver processes per file)."""
     try:
         if local:
             solver = Path(__file__).resolve().parent / "solver"
@@ -397,10 +439,48 @@ def _query_result_labels(cfg: dict, category: str, local: bool, extra_docker_fla
                 capture_output=True, text=True,
             )
         if result.returncode == 0:
-            return json.loads(result.stdout).get("result_labels", _DEFAULT_RESULT_LABELS)
+            return json.loads(result.stdout)
     except Exception:  # noqa: BLE001
         pass
-    return _DEFAULT_RESULT_LABELS
+    return {}
+
+
+def clean_conflicts(flat_csv: Path) -> int:
+    if not flat_csv.exists():
+        print(f"ERROR: {flat_csv} does not exist.", file=sys.stderr)
+        return 1
+    with flat_csv.open(encoding="utf-8", newline="") as fh:
+        rows = list(csv.DictReader(fh, delimiter=";"))
+    if not rows:
+        print("Nothing to clean.")
+        return 0
+
+    # Keep only the most recent row per (Problem, Category), reset Conflict to NONE
+    seen: dict[tuple[str, str], dict] = {}
+    for row in rows:
+        key = (row.get("Problem", ""), row.get("Category", ""))
+        seen[key] = row  # last row wins (CSV is appended in order)
+
+    fieldnames = list(rows[0].keys())
+    if "Conflict" not in fieldnames:
+        fieldnames.append("Conflict")
+
+    cleaned = []
+    for row in seen.values():
+        row = dict(row)
+        row["Conflict"] = "NONE"
+        cleaned.append(row)
+
+    cleaned.sort(key=lambda r: (r.get("Category", ""), r.get("Problem", "")))
+
+    with flat_csv.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames, delimiter=";", extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(cleaned)
+
+    removed = len(rows) - len(cleaned)
+    print(f"Cleaned {flat_csv}: kept {len(cleaned)} row(s), removed {removed} conflict row(s).")
+    return 0
 
 
 def run_all_configs(runall_dir: Path) -> int:
@@ -445,6 +525,13 @@ def run_all_configs(runall_dir: Path) -> int:
 def main() -> int:
     cli = parse_args()
 
+    if getattr(cli, "clean_conflicts", False):
+        flat_csv_arg = getattr(cli, "flat_csv", None)
+        if not flat_csv_arg:
+            print("ERROR: --clean-conflicts requires --flat-csv.", file=sys.stderr)
+            return 2
+        return clean_conflicts(Path(str(flat_csv_arg)))
+
     runall_dir = getattr(cli, "runall", None)
     if runall_dir:
         return run_all_configs(Path(runall_dir))
@@ -476,8 +563,6 @@ def main() -> int:
         cfg["OUTDIR"] = outdir
     cfg["EXTENSION"] = extension
 
-    jobs = int(cfg.get("JOBS", os.cpu_count() or 1))
-
     if local:
         jar_path = Path(os.path.expandvars(require(cfg, "APROVE_JAR"))).expanduser().resolve()
         if not jar_path.exists():
@@ -491,10 +576,10 @@ def main() -> int:
     else:
         image = require(cfg, "IMAGE")
         cfg["IMAGE"] = image
-        memory = cfg.get("MEMORY")
+        docker_memory = cfg.get("DOCKER_MEMORY")
         mem_flags = []
-        if memory:
-            mem_flags = [f"--memory={memory}", f"--memory-swap={memory}"]
+        if docker_memory:
+            mem_flags = [f"--memory={docker_memory}", f"--memory-swap={docker_memory}"]
         jar_mount = []
         if aprove_jar:
             jar_path = Path(os.path.expandvars(str(aprove_jar))).expanduser().resolve()
@@ -510,7 +595,16 @@ def main() -> int:
         cfg["COMMIT_ID"] = get_commit_id(image, Path(str(jar_path_for_version)) if jar_path_for_version else None)
         print(f"Mode: docker (image={image})")
 
-    result_labels = _query_result_labels(cfg, category, local, mem_flags + jar_mount if not local else [])
+    meta = _query_meta(cfg, category, local, mem_flags + jar_mount if not local else [])
+    result_labels = meta.get("result_labels", _DEFAULT_RESULT_LABELS)
+
+    # Number of files run in parallel is always MAX_CONCURRENT_FILES // CORES_PER_FILE
+    cores_per_file = max(1, int(cfg.get("CORES_PER_FILE", 1) or 1))
+    max_concurrent_files = max(1, int(cfg.get("MAX_CONCURRENT_FILES", os.cpu_count() or 1) or 1))
+    jobs = max(1, max_concurrent_files // cores_per_file)
+    if cores_per_file > 1 and jobs != max_concurrent_files:
+        print(f"Category '{category}' uses {cores_per_file} cores per file; "
+              f"reducing parallel files from {max_concurrent_files} to {jobs} to avoid CPU oversubscription.")
 
     print(f"Testing all *.{extension} in {folder}/{subdir}")
     print(f"Under the {category} category using {cfg.get('APROVE_JAR', 'jar from image')}")
@@ -532,7 +626,7 @@ def main() -> int:
         outdir.mkdir(parents=True, exist_ok=True)
         (outdir / "results").mkdir(parents=True, exist_ok=True)
         if not resume and not rerun:
-            (outdir / "summary.csv").write_text("File;Result;FullResult;InputPath\n", encoding="utf-8")
+            (outdir / "summary.csv").write_text("File;Result;FullResult;InputPath;Time_ms\n", encoding="utf-8")
 
     files = filter_files(files, root, outdir, resume, rerun)
 
@@ -544,8 +638,11 @@ def main() -> int:
         n = int(sample)
         if n < len(files):
             total_before = len(files)
-            files = sorted(random.sample(files, n))
-            print(f"Sample: randomly selected {n} of {total_before} file(s).")
+            seed = cfg.get("SEED")
+            rng = random.Random(int(seed)) if seed is not None else random
+            files = sorted(rng.sample(files, n))
+            seed_info = f", seed={seed}" if seed is not None else ""
+            print(f"Sample: randomly selected {n} of {total_before} file(s){seed_info}.")
 
     total = len(files)
 
@@ -564,7 +661,7 @@ def main() -> int:
             with lock:
                 done_ref["count"] += 1
             try:
-                _, _, err = fut.result()
+                _, _, err, _ = fut.result()
                 if err and err != "cancelled":
                     print(err, file=sys.stderr)
             except Exception as exc:  # noqa: BLE001
@@ -606,10 +703,12 @@ def main() -> int:
     flat_csv = cfg.get("FLAT_CSV")
     if flat_csv:
         flat_path = Path(str(flat_csv))
-        contra, bad, good, breaking = 0, 0, 0, 0
+        contra, bad, good, breaking, faster = 0, 0, 0, 0, 0
         contra_rows: list[str] = []
         bad_rows: list[str] = []
         breaking_rows: list[str] = []
+        # For FASTER: group rows by (problem, category) to pair old and new times
+        by_key: dict[tuple[str, str], list[dict]] = {}
         if flat_path.exists():
             with flat_path.open(encoding="utf-8", newline="") as fh:
                 for row in csv.DictReader(fh, delimiter=";"):
@@ -626,13 +725,18 @@ def main() -> int:
                     elif conflict == "BROKEN":
                         breaking += 1
                         breaking_rows.append(entry)
-        if contra or bad or good or breaking:
+                    elif conflict == "FASTER":
+                        faster += 1
+                    key = (row.get("Problem", ""), row.get("Category", ""))
+                    by_key.setdefault(key, []).append(row)
+        if contra or bad or good or breaking or faster:
             print(f"\n{'Conflict':<10} {'Rows':>6}")
             print(f"{'-'*10} {'-'*6}")
             print(f"{'BROKEN':<10} {breaking:>6}")
             print(f"{'CONTRA':<10} {contra:>6}")
             print(f"{'BAD':<10} {bad:>6}")
             print(f"{'GOOD':<10} {good:>6}")
+            print(f"{'FASTER':<10} {faster:>6}")
             for label, rows in [("BROKEN", breaking_rows), ("CONTRA", contra_rows), ("BAD", bad_rows)]:
                 if rows:
                     seen: set[str] = set()
@@ -640,6 +744,26 @@ def main() -> int:
                     print(f"\n{label} conflicts ({len(unique)} problem(s)):")
                     for r in unique:
                         print(r)
+            if faster:
+                faster_details: list[tuple[int, str]] = []
+                for key, rows in by_key.items():
+                    new_rows = [r for r in rows if r.get("Conflict", "") == "FASTER"]
+                    old_rows = [r for r in rows if r.get("Conflict", "") != "FASTER"]
+                    for new_row in new_rows:
+                        problem, category, result = key[0], key[1], new_row.get("Result", "")
+                        old_time = old_rows[-1].get("Time_ms", "") if old_rows else ""
+                        new_time = new_row.get("Time_ms", "")
+                        try:
+                            old_ms, new_ms = int(old_time), int(new_time)
+                            saved_pct = int((old_ms - new_ms) / old_ms * 100)
+                            line = f"  {problem}  [{category}]  {result}: {old_ms}ms → {new_ms}ms (-{saved_pct}%)"
+                            faster_details.append((old_ms - new_ms, line))
+                        except (ValueError, TypeError):
+                            faster_details.append((0, f"  {problem}  [{category}]  {result}"))
+                faster_details.sort(key=lambda x: -x[0])
+                print(f"\nFASTER ({len(faster_details)} problem(s)):")
+                for _, line in faster_details:
+                    print(line)
 
     return exit_code
 

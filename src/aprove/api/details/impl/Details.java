@@ -15,6 +15,7 @@ public enum Details {
     private static Map<Capability, BaseDetails<?>> createDetails() {
         Map<Capability, BaseDetails<?>> result = new LinkedHashMap<>();
         result.put(Capability.HTML, new HtmlDetails());
+        result.put(Capability.PLAIN, new PlainDetails());
         result.put(Capability.SOURCE, new SourceDetails());
         result.put(Capability.DOT, new DotDetails());
         result.put(Capability.LATEX, new LatexDetails());

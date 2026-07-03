@@ -1177,7 +1177,7 @@ jbcTermGraph = TerminationGraphToSCC
 
 jbcAbstract = JBCToTerminationGraph[TryNontermProofs=True];jbcGraph
 
-jbcT2 = TerminationGraphToComplexityRuleSet:JBCGraphEdgesToIntTrs[Weighted=False]:IRSToT2SysProcessor:RunDefaultStrategyForObligation
+jbcT2 = TerminationGraphToComplexityRuleSet:JBCGraphEdgesToIntTrs[TargetSystem=IRS]:IRSToT2SysProcessor:RunDefaultStrategyForObligation
 
 jbcGraph = Any(
                 Solve(
@@ -1240,7 +1240,7 @@ jbcITS =
       # When we chain aggressively, then we also slice, such that we generate a moderately and an aggressively simplified ITS.
       jbcEdgesForCES;
       CombineParallel(
-        JBCGraphEdgesToIntTrs; jbcIntTrsChain; jbcIntTrsSimplify; WeightedIntTrsToCES,
+        JBCGraphEdgesToIntTrs[TargetSystem=CES]; jbcIntTrsChain; jbcIntTrsSimplify; CESBackend[AssumeSequential=True],
         # also try alternative encoding of Div and Mod and filtering of Object-fields once
         JBCGraphEdgesToIntTrs[SimpleDivModEncoding=False]; jbcIntTrsChain; jbcIntTrsSimplify; WeightedIntTrsToKoAT
       ),
@@ -1790,48 +1790,3 @@ cidtKnowledgePropagation = Maybe(CIdtKnowledgePropagation)
 cidtKnowledgeGeneration = Maybe(CIdtCNDGraph[Strategy = CND_KNOWLEDGE_GENERATION])
 
 cidtIntRedPairSolve = CIdtPolyIntRedPair[Solver = SAT_SOLVER, All_strict_and_bounded = FALSE, RANGE_MIN = -3, RANGE_MAX = 3] : cidtKnowledgePropagation : cidtCleanup : cidtIntRedPairSolve
-
-# ============================================================ #
-# =================== Termination of PTRS ==================== #
-# ============================================================ #
-
-terminationptrs = PTRStoQTRS : qtrs
-
-# ============================================================ #
-# ======================= AST of PTRS ======================== #
-# ============================================================ #
-
-astptrs = First(
-			Solve(
-              PTRStoPQTRS : astpqtrs
-            ),
-            PTRSDirectPOLO[Allstrict = False, Order = POLO[Degree = -1, Range = 2, Engine = MINISAT]],
-			PTRSDirectPOLO[Allstrict = False, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]]
-		  )
-
-# ============================================================ #
-# ======================= AST of PQTRS ======================== #
-# ============================================================ #
-
-astpqtrs = PQTRStoPQDP : pqdpproblem
-
-# ============================================================ #
-# ==================== AST of PQDPProblem ===================== #
-# ============================================================ #
-
-pqdpproblem = Repeat(0,*,
-	           First(
-	             PQDPDependencyGraphProcessor,
-	             PQDPUsableTermsProcessor,
-	             PQDPUsableRulesProcessor,
-	             PQDPProbabilityRemovalProcessor : qdp,
-	             Any(
-		           Timer(10000,
-		             PQDPReductionPairProcessor[Allstrict = False, Order = POLO[Degree = -1, Range = 2, Engine = MINISAT]]
-		           ),
-		           Timer(20000,
-		             PQDPReductionPairProcessor[Allstrict = False, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]]
-		           )
-	             )
-	           )
-	          )

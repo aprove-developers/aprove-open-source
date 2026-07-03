@@ -8,6 +8,7 @@ public enum Capability {
                         DOT_MODERN,
                         HTML,
                         LATEX,
+                        PLAIN,
                         SOURCE,
                         SVG
 }

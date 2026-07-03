@@ -19,6 +19,10 @@ public class LLVMParseFunctionDefinition extends LLVMParseFunctionDeclaration {
         this.blocks.add(block);
     }
 
+    public ArrayList<LLVMParseBlock> getBlocks() {
+        return this.blocks;
+    }
+
     public LLVMFnDefinition convertToFnDefinition(Map<String, LLVMType> typeDefs, int pointerSize)
     throws LLVMParseException {
         // convert instruction blocks

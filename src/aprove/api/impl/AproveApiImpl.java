@@ -12,4 +12,15 @@ public class AproveApiImpl implements AproveApi {
         Objects.requireNonNull(path);
         return ProblemInputImpl.from(path);
     }
+
+    @Override
+    public TrsInputBuilder newTrsInput() {
+        return new TrsInputBuilder();
+    }
+
+    @Override
+    public PtrsInputBuilder newPtrsInput(Goal goal) {
+        Objects.requireNonNull(goal);
+        return new PtrsInputBuilder(goal);
+    }
 }

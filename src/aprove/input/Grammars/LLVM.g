@@ -220,30 +220,23 @@ debug_information returns [LLVMParseDebugInformation debugInformation]
                 COMMA?
               )*
             CLOSEP
-          | DEBUG_IDENTIFIER
+          | kind=DEBUG_IDENTIFIER
+            {debugInformation.setKind($kind.text);}
             OPENP
               (
-                ('name' | 'line' | DEBUG_IDENTIFIER | TYPE | ALIGN)
+                k1=di_key
                 (
                   COLON
-                  (~(COMMA | OPENP | CLOSEP))*
-                  (
-                    OPENP
-                      (~(OPENP | CLOSEP))*
-                    CLOSEP
-                  )*
+                  v1=di_value
+                  {debugInformation.addField($k1.text, $v1.text);}
                 )?
                 (
                   COMMA
-                  ('name' | 'line' | DEBUG_IDENTIFIER | TYPE | ALIGN)
+                  k2=di_key
                   (
                     COLON
-                    (~(COMMA | OPENP | CLOSEP))*
-                    (
-                      OPENP
-                        (~(OPENP | CLOSEP))*
-                      CLOSEP
-                    )*
+                    v2=di_value
+                    {debugInformation.addField($k2.text, $v2.text);}
                   )?
                 )*
               )?
@@ -255,6 +248,23 @@ debug_information returns [LLVMParseDebugInformation debugInformation]
             debugInformation.setFunctionName($fname.text);
             debugInformation.setCLine($line.literal);
         }
+    ;
+
+
+// the key of a field in a debug metadata node (e.g. "name", "encoding", "type", "baseType")
+di_key
+    :   ('name' | 'line' | DEBUG_IDENTIFIER | TYPE | ALIGN)
+    ;
+
+// the value of a field in a debug metadata node (e.g. "DW_ATE_unsigned", "!12", "32", "\"unsigned int\"");
+// the value text is later retrieved via the rule's matched-input text
+di_value
+    :   (~(COMMA | OPENP | CLOSEP))*
+        (
+          OPENP
+            (~(OPENP | CLOSEP))*
+          CLOSEP
+        )*
     ;
 
 
@@ -1137,6 +1147,7 @@ instruction_call returns [LLVMParseInstruction instr]
     ArrayList<Object> funcParams = new ArrayList<Object>();
     ArrayList<Object> retParams = new ArrayList<Object>();
     ArrayList<Object> sigParams = new ArrayList<Object>();
+    ArrayList<String> metaRefs = new ArrayList<String>();
 }
     :   (id1=init_identifier ASSIGN )? // no assignment needed for functions which have void as return type
         (TAIL {tail = true;})?
@@ -1169,7 +1180,7 @@ instruction_call returns [LLVMParseInstruction instr]
             METADATA?
             (
               (
-                EXCLAMATION (INT_NUMBER | DIEXPRESSION)
+                EXCLAMATION (md1=INT_NUMBER {metaRefs.add($md1.text);} | DIEXPRESSION)
               )
             | (
                 f2=full_type_r_no_metadata {funcParams.add($f2.param);}
@@ -1182,7 +1193,7 @@ instruction_call returns [LLVMParseInstruction instr]
                 METADATA?
                 (
                   (
-                    EXCLAMATION (INT_NUMBER | DIEXPRESSION)
+                    EXCLAMATION (md2=INT_NUMBER {metaRefs.add($md2.text);} | DIEXPRESSION)
                   )
                 | (
                     f3=full_type_r_no_metadata
@@ -1238,12 +1249,27 @@ instruction_call returns [LLVMParseInstruction instr]
                 instr.addParam(elem);
             }
 
-            instr.addParam(funcAttr.size()); 
+            instr.addParam(funcAttr.size());
             for(Object attr : funcAttr) {
                 instr.addParam(attr);
             }
-            
+
             instr.addParam($debug_line.literal);
+
+            // Detect debug intrinsics (llvm.dbg.declare / llvm.dbg.value / ...). These are not analyzed but
+            // for llvm.dbg.declare we remember the binding "pointer of an alloca -> DILocalVariable" so that the
+            // source-level signedness of the variable can later be recovered from the debug metadata. Note that the
+            // leading "@" of the function name has already been stripped by the identifier rule.
+            String dbgFuncName = ($id2.literal instanceof LLVMParseVariableLiteral)
+                ? ((LLVMParseVariableLiteral)$id2.literal).getName() : null;
+            if (dbgFuncName != null && dbgFuncName.startsWith("llvm.dbg.")) {
+                instr.setDbgIntrinsic(true);
+                if (dbgFuncName.startsWith("llvm.dbg.declare")
+                    && funcParams.size() >= 2 && !metaRefs.isEmpty()
+                    && (funcParams.get(1) instanceof LLVMParseLiteral)) {
+                    instr.setDbgDeclare((LLVMParseLiteral)funcParams.get(1), Integer.parseInt(metaRefs.get(0)));
+                }
+            }
         }
     ;
 

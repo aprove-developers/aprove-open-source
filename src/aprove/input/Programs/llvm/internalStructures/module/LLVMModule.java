@@ -307,6 +307,14 @@ public class LLVMModule implements Immutable, Exportable, JSONExport, LLVMIRExpo
     private final ImmutableSet<Pair<String,String>> unsignedUnboundedVariables;
 
     /**
+     * The set of (function name, pointer/alloca variable name) pairs for which the C source declared the pointed-to
+     * variable as an unsigned integer type. This is recovered from the debug metadata (llvm.dbg.declare +
+     * DILocalVariable + DIBasicType) and is used to seed the unsigned variable sets. It is authoritative because it
+     * stems from the actual C type rather than from a heuristic over comparison operators.
+     */
+    private final ImmutableSet<Pair<String,String>> debugUnsignedAllocas;
+
+    /**
      * variable definitions
      */
     private final ImmutableMap<String, LLVMGlobalVariable> variables;
@@ -334,11 +342,16 @@ public class LLVMModule implements Immutable, Exportable, JSONExport, LLVMIRExpo
         ImmutableSet<LLVMRelation> programRefRelations,
         ImmutableMap<LLVMProgramPosition, ImmutableSet<String>> liveVariablesParam,
         ImmutableMap<LLVMProgramPosition, ImmutableSet<ImmutableSet<IntegerRelation>>> returnConditionsParam,
+        ImmutableSet<Pair<String,String>> debugUnsignedAllocasParam,
         int pointerSizeParam
     ) {
         this.aliasDefinitions = aliases;
         this.dataLayout = layout;
         this.debugInformation = debugInfo;
+        this.debugUnsignedAllocas =
+            debugUnsignedAllocasParam == null
+                ? ImmutableCreator.create(new LinkedHashSet<Pair<String,String>>())
+                : debugUnsignedAllocasParam;
         this.fnDeclarations = declarations;
         this.pointerSize = pointerSizeParam;
         this.i1Alignment = LLVMModule.computeI1AlignmentFromDataLayout(this.dataLayout);
@@ -474,6 +487,9 @@ public class LLVMModule implements Immutable, Exportable, JSONExport, LLVMIRExpo
      */
     public Pair<ImmutableSet<Pair<String,String>>,ImmutableSet<Pair<String,String>>> computeUnsignedBitvectorVariables() {
         LinkedHashSet<Pair<String,String>> res = new LinkedHashSet<Pair<String,String>>(computeUnsignedUnboundedVariables());
+        // seed with the source signedness recovered from the debug metadata (authoritative C type information) so that
+        // it is propagated through the fixpoint below
+        this.addDebugUnsignedValues(res);
         LinkedHashSet<Pair<String,String>> resOld = null;
         LinkedHashSet<Pair<String,String>> addressesWithUnsignedValues = new LinkedHashSet<Pair<String,String>>();
         LinkedHashSet<Pair<String,String>> addressesWithUnsignedValuesOld = null;
@@ -758,6 +774,68 @@ public class LLVMModule implements Immutable, Exportable, JSONExport, LLVMIRExpo
             }
         }
         return ImmutableCreator.create(res);
+    }
+
+    /**
+     * Seeds the specified set with the C source signedness recovered from the debug metadata: a value loaded from (or a
+     * variable stored to) an alloca that holds an unsigned source variable is itself unsigned. This is only used for the
+     * bitvector (bounded) integer representation.
+     * @param res The set to seed (modified in place).
+     */
+    private void addDebugUnsignedValues(LinkedHashSet<Pair<String,String>> res) {
+        if (this.debugUnsignedAllocas.isEmpty()) {
+            return;
+        }
+        for (Entry<String, LLVMFnDeclaration> decl : this.fnDeclarations.entrySet()) {
+            if (!(decl.getValue() instanceof LLVMFnDefinition)) {
+                continue;
+            }
+            String funcName = decl.getKey();
+            LLVMFnDefinition def = (LLVMFnDefinition) decl.getValue();
+            for (LLVMBasicBlock block : def.getBlocks().values()) {
+                for (LLVMInstruction instruction : block.getInstructions()) {
+                    if (instruction instanceof LLVMLoadInstruction) {
+                        LLVMLoadInstruction load = (LLVMLoadInstruction) instruction;
+                        if (load.getAddressValue() instanceof LLVMVariableLiteral
+                            && this.isDebugUnsignedAlloca(funcName, ((LLVMVariableLiteral) load.getAddressValue()).getName())) {
+                            res.add(new Pair<String,String>(funcName, load.getIdentifier().getName()));
+                        }
+                    } else if (instruction instanceof LLVMStoreInstruction) {
+                        LLVMStoreInstruction store = (LLVMStoreInstruction) instruction;
+                        if (store.getAddressValue() instanceof LLVMVariableLiteral
+                            && store.getStoredValue() instanceof LLVMVariableLiteral
+                            && this.isDebugUnsignedAlloca(funcName, ((LLVMVariableLiteral) store.getAddressValue()).getName())) {
+                            res.add(new Pair<String,String>(funcName, ((LLVMVariableLiteral) store.getStoredValue()).getName()));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * @param funcName The name of a function.
+     * @param pointerName The name of a pointer (alloca) variable.
+     * @return True iff the C source declared the variable living in the specified pointer (in the specified function) as
+     *         an unsigned integer type (according to the debug metadata).
+     */
+    private boolean isDebugUnsignedAlloca(String funcName, String pointerName) {
+        // Internal variable names carry their scope sigil ("%"/"@"), while the names recovered from the debug metadata
+        // are stored without it. Normalize before comparing.
+        String normalized = pointerName;
+        if (normalized != null && !normalized.isEmpty()
+            && (normalized.charAt(0) == '%' || normalized.charAt(0) == '@')) {
+            normalized = normalized.substring(1);
+        }
+        return this.debugUnsignedAllocas.contains(new Pair<String,String>(funcName, normalized));
+    }
+
+    /**
+     * @return The set of (function name, alloca variable name) pairs that hold an unsigned source variable according to
+     *         the debug metadata.
+     */
+    public ImmutableSet<Pair<String,String>> getDebugUnsignedAllocas() {
+        return this.debugUnsignedAllocas;
     }
 
     /**
@@ -1070,6 +1148,7 @@ public class LLVMModule implements Immutable, Exportable, JSONExport, LLVMIRExpo
                 this.getProgramReferenceRelations(),
                 this.getLiveVariables(),
                 this.getReturnConditions(),
+                this.getDebugUnsignedAllocas(),
                 this.getPointerSize()
             );
     }
@@ -1091,6 +1170,7 @@ public class LLVMModule implements Immutable, Exportable, JSONExport, LLVMIRExpo
                 this.getProgramReferenceRelations(),
                 ImmutableCreator.create(liveVars),
                 this.getReturnConditions(),
+                this.getDebugUnsignedAllocas(),
                 this.getPointerSize()
             );
     }
@@ -1112,6 +1192,7 @@ public class LLVMModule implements Immutable, Exportable, JSONExport, LLVMIRExpo
                 this.getProgramReferenceRelations(),
                 this.getLiveVariables(),
                 ImmutableCreator.create(retConds),
+                this.getDebugUnsignedAllocas(),
                 this.getPointerSize()
             );
     }

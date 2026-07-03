@@ -10,6 +10,7 @@ import aprove.*;
 import aprove.Globals.AproveVersion;
 import aprove.exit.*;
 import aprove.input.*;
+import aprove.input.Programs.ariTrs.*;
 import aprove.logging.*;
 import aprove.logging.config.*;
 import aprove.prooftree.Obligations.*;
@@ -51,6 +52,7 @@ public class Main {
         final CLIOpts options = optResult.x;
         final Getopt g = optResult.y;
 
+        CliOverrides.set(options.goalOverride, options.strategyOverride, options.startTermOverride);
         this.fileName = "<no file>";
         try {
             Main.initLogging(options.level);
@@ -169,6 +171,8 @@ public class Main {
                 System.out.println("<P><H2>An error occurred!</H2></P>" + Main.HTML_FOOTER);
             }
             return null;
+        } finally {
+            CliOverrides.clear();
         }
     }
 
@@ -265,9 +269,12 @@ public class Main {
     }
 
     private static Pair<CLIOpts, Getopt> parseCommandLineOptions(final String[] argv) throws KillAproveException {
-        LongOpt[] longopts = new LongOpt[1];
+        LongOpt[] longopts = new LongOpt[4];
         longopts[0] = new LongOpt("bit-width", LongOpt.REQUIRED_ARGUMENT, null, 'B');
-        final Getopt g = new Getopt("AProVE CLI", argv, "a:bc:C:Z:de:f:h:i:l:m:no:p:q:rs:t:u:v:w:xzB:FP:M::O:T:W:", longopts);
+        longopts[1] = new LongOpt("goal", LongOpt.REQUIRED_ARGUMENT, null, 'G');
+        longopts[2] = new LongOpt("rewrite-strategy", LongOpt.REQUIRED_ARGUMENT, null, 'R');
+        longopts[3] = new LongOpt("startterm", LongOpt.REQUIRED_ARGUMENT, null, 'S');
+        final Getopt g = new Getopt("AProVE CLI", argv, "a:bc:C:Z:de:f:h:i:l:m:no:p:q:rs:t:u:v:w:xzB:FP:M::O:T:W:G:R:S:", longopts);
         int c;
         final CLIOpts options = new CLIOpts();
         while ((c = g.getopt()) != -1) {
@@ -449,6 +456,16 @@ public class Main {
                 options.witnessFile = arg;
                 break;
 
+            case 'G':
+                options.goalOverride = g.getOptarg().toLowerCase();
+                break;
+            case 'R':
+                options.strategyOverride = g.getOptarg().toLowerCase();
+                break;
+            case 'S':
+                options.startTermOverride = g.getOptarg().toLowerCase();
+                break;
+
             /* Parameters without effect */
             case 'o':
             case 'r':
@@ -479,6 +496,10 @@ public class Main {
         String strategyName = null;
         int timeout = 0;
         String witnessFile;
+        // .ari file declaration overrides
+        String goalOverride = null;       // --goal <ast|sast|termination|complexity|confluence|infeasibility|past>
+        String strategyOverride = null;   // --rewrite-strategy <innermost|outermost|full>
+        String startTermOverride = null;  // --startterm <all|basic>
     }
 
     private static enum Mode {

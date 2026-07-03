@@ -29,6 +29,11 @@ public class SubAprove implements ProveRunner {
         return this.handle.getResult();
     }
 
+    @Override
+    public ObligationNode getRoot() {
+        return this.parent.getRoot();
+    }
+
     public void setTimeout(final long timeout) {
         this.timeout = timeout;
     }

@@ -1,6 +1,7 @@
 /buildEcl
 /build
-/gen
+/gen/**
+!/gen/.gitkeep
 /dist
 /doc/api
 /bench/results
@@ -22,3 +23,6 @@ GlobalSettings.java
 /llvmWitness.txt
 /ruleTree.dot
 **/.DS_Store
+__pycache__
+**/__pycache__/
+**/*.pyc

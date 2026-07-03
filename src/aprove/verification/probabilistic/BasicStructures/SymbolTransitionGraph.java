@@ -32,17 +32,17 @@ public class SymbolTransitionGraph implements Immutable {
      * create Graph from scratch, if P is given, or start with "graph", if graph is given.
      * @param PTRSProblem - The underlying ptrsproblem
      */
-    public SymbolTransitionGraph(final PTRSProblem ptrs) {
+    public SymbolTransitionGraph(Set<ProbabilisticRule> pr, ImmutableSet<FunctionSymbol> signature) {
         this.g = new Graph();
 
-        final Set<FunctionSymbol> fsyms = ptrs.getSignature();
+        final Set<FunctionSymbol> fsyms = signature;
         //Nodes
         for (final FunctionSymbol f : fsyms) {
             final Node<FunctionSymbol> newNode = new Node<>(f);
             this.g.addNode(newNode);
         }
         //Edges
-        for (final ProbabilisticRule prule : ptrs.getPR()) {
+        for (final ProbabilisticRule prule : pr) {
             final FunctionSymbol rootLeft = prule.getLeft().getFunctionSymbol();
             for (final Entry<?, Integer> entry : prule.getRight().getProbabilityMapping().entrySet()) {
                 final TRSTerm term = ((Pair<TRSTerm, BigFraction>) entry.getKey()).getKey();
