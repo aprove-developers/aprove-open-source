@@ -227,6 +227,16 @@ public class GraphBuilder {
                 var argTarget = argTarget(name, i, target);
                 walkType(args.get(i), argPol, argTarget);
             }
+        } else if (head instanceof Var var) {
+            String name = var.getSymbol().toString();
+            walkType(head, pol, target);
+            if (paramIndex.containsKey(name)) {
+                int index = paramIndex.get(name);
+                target = new OccurrenceGraph.ArgNode(currentDef, index);
+            }
+            for (var a : args) {
+                walkType(a, pol.otimes(Occurrence.MIXED), target);
+            }
         } else {
             walkType(head, pol, target);
             for (var a : args) {
