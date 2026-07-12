@@ -10,7 +10,6 @@ public enum Occurrence {
     JUST_NEG,
     JUST_POS,
     STRICT_POS,
-//    GUARD_POS, //not quite sure (think it is for records)
     UNUSED; // does not occur
 
     /**
@@ -29,9 +28,6 @@ public enum Occurrence {
 
         if (this == JUST_NEG && other == JUST_NEG) return JUST_NEG;
         if (this == JUST_NEG || other == JUST_NEG) return MIXED;
-
-//        if (this == GUARD_POS) return other;
-//        if (other == GUARD_POS) return this;
 
         if (this == STRICT_POS) return other;
         if (other == STRICT_POS) return this;
@@ -52,7 +48,6 @@ public enum Occurrence {
         if (this == JUST_NEG && other == JUST_NEG) return JUST_POS;
         if (this == JUST_NEG || other == JUST_NEG) return JUST_NEG;
         if (this == JUST_POS || other == JUST_POS) return JUST_POS;
-//        if (this == GUARD_POS || other == GUARD_POS) return GUARD_POS;
         return STRICT_POS;
     }
 
