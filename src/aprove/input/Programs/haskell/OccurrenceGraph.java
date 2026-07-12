@@ -268,7 +268,7 @@ public class OccurrenceGraph {
      */
     public Occurrence transitiveOccurrence(Node source, Node target) {
         //DFS: seen = pairs already explored
-        Set<Map.Entry<Node, Node>> seen = new HashSet<>();
+        Set<Map.Entry<Node, Map.Entry<Occurrence, Node>>> seen = new HashSet<>();
         return dfs(Optional.empty(), source, target, Optional.empty(), Occurrence.UNUSED, seen);
     }
 
@@ -289,16 +289,17 @@ public class OccurrenceGraph {
             Node target,
             Optional<Occurrence> pathPol,
             Occurrence acc,
-            Set<Map.Entry<Node, Node>> seen
+            Set<Map.Entry<Node,Map.Entry<Occurrence, Node>>> seen
     ) {
         if (previous.isPresent()) {
-            var key = Map.entry(previous.get(), current);
+            var key = Map.entry(previous.get(), Map.entry(pathPol.orElse(Occurrence.UNUSED), current));
             if (seen.contains(key)) return acc;
             seen.add(key);
         }
         if (current.equals(target) && pathPol.isPresent()) {
             acc = acc.oplus(pathPol.get());
-            if (acc == Occurrence.MIXED) return acc; // can't get worse
+//            if (acc == Occurrence.MIXED) return acc;
+            return acc;
 
         }
 
@@ -310,6 +311,7 @@ public class OccurrenceGraph {
                     .map(p -> p.otimes(edgeOcc))
                     .orElse(edgeOcc);
             acc = dfs(Optional.of(current), next, target, Optional.of(newPath), acc, seen);
+            if (acc == Occurrence.MIXED) return acc;
         }
 
         return acc;
