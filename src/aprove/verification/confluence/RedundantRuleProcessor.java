@@ -33,10 +33,6 @@ public class RedundantRuleProcessor implements Processor {
 
         var newConfTRSProblem = removeRedundantRules(confTRSProblem, aborter);
 
-        if(newConfTRSProblem.equals(confTRSProblem)){
-            return ResultFactory.unsuccessful("No rules have been removed.");
-        }
-
         return ResultFactory.provedAnd(List.of(newConfTRSProblem), YNMImplication.SOUND, new RedundantRuleProof(newConfTRSProblem.getRules()));
     }
 
