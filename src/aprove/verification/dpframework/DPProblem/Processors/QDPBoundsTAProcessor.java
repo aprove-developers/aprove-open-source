@@ -52,6 +52,11 @@ public class QDPBoundsTAProcessor extends QDPProblemProcessor {
         if (Options.certifier.isCeta()) {
             return false;
         }
+        if (!qdp.getMinimal()) {
+            // the bounds start language covers only rule-generated instantiations,
+            // so the technique argues about minimal chains only
+            return false;
+        }
         final Set<Rule> P = qdp.getP();
         final Set<FunctionSymbol> rootsOfP = new LinkedHashSet<FunctionSymbol>();
         for (final Rule r : P) {
