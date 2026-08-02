@@ -292,6 +292,17 @@ public class PTRSProblem extends DefaultBasicObligation implements Immutable {
         return true;
     }
 
+    public boolean isNonErasing() {
+        for (final ProbabilisticRule rule : getPR()) {
+            for (final Rule r : rule.getNonProbabilisticRepresentation()) {
+                if (!r.isNonErasing()) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     public boolean isConstructorBased() {
         for (final ProbabilisticRule rule : getPR()) {
             final Set<FunctionSymbol> defsym = getDefSymbolsOfR();

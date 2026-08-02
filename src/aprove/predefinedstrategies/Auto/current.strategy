@@ -2046,7 +2046,7 @@ cpx_ptrs = CombineParallel(
                  Solve(PTRS_Cpx_DerivationalToRuntimeProcessor : RunDefaultStrategyForObligation)
                ),
                Solve(ptrs_polo_exp),
-               Timer(30000,
+               Timer(20000,
 	              PTRS_Cpx_LoopFinder[Allcuts = True]
 	           )
              )

@@ -33,17 +33,24 @@ public class PTRS_Cpx_ToInnermostProcessor extends PTRS_Cpx_Processor {
             return false;
         }
 
+        //For strategies other than full rewriting (e.g., outermost), the equivalence to
+        //innermost rewriting additionally requires non-erasingness.
+        if (R.getRewriteStrategy() != RewriteStrategy.FULL && !(R.isNonErasing())) {
+            return false;
+        }
+
         return true;
     }
 
     @Override
     protected Result processCpxPTRS(final PTRS_Cpx_Problem R, final Abortion aborter) throws AbortionException {
-        //Since the processor is applicable, we know that R is left-linear and non-overlapping.
-        //Only check spareness (in case of basic start terms) or right-linearity.
+        //Since the processor is applicable, we know that R is left-linear and non-overlapping
+        //(and non-erasing in case of a strategy other than full rewriting).
+        //Only check spareness (in case of full rewriting with basic start terms) or right-linearity.
         if (R.isRightLinear()) {
             final var newPTrs = PTRS_Cpx_Problem.create(ImmutableCreator.create(R.getPR()), RewriteStrategy.INNERMOST, R.isBasic());
             return ResultFactory.proved(newPTrs, BothBounds.create(), new CpxPTRS_ToInnermostProof(null, false, R));
-        } else if (R.isBasic()) {
+        } else if (R.getRewriteStrategy() == RewriteStrategy.FULL && R.isBasic()) {
             final Set<Rule> rules = new LinkedHashSet<>();
             for (final var pr : R.getPR()) {
                 for (final var r : pr.getNonProbabilisticRepresentation()) {
