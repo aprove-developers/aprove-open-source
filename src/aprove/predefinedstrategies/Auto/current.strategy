@@ -1904,29 +1904,33 @@ disprove_AST = Any(
 	             )
                )
 
-prove_AST = First(
+prove_AST = Any(
              PTRS_AST_DecidableRNT,
-			 Solve(PTRS_ToInnermost : RunDefaultStrategyForObligation),
-             Solve(PTRS_toPQTRS : pqtrs_AST),
-             PTRS_AST_DirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]],
-             PTRS_AST_ExpectedDirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]],
-             PTRS_AST_DirectMATRO[Allstrict = True, Order = MATRO[Type = COLLAPSINGDPTUPLE[Size = 2, Filter = NOFILTER], Range = 3, Engine = MINISAT]],
-             Solve(PTRS_toQTRS : qtrs)
+             First(
+    	       Solve(PTRS_ToInnermost : RunDefaultStrategyForObligation),
+               Solve(PTRS_toPQTRS : pqtrs_AST),
+	           PTRS_AST_DirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]],
+	           PTRS_AST_ExpectedDirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]],
+	           PTRS_AST_DirectMATRO[Allstrict = True, Order = MATRO[Type = COLLAPSINGDPTUPLE[Size = 2, Filter = NOFILTER], Range = 3, Engine = MINISAT]],
+	           Solve(PTRS_toQTRS : qtrs)
+	         )
            )
            
 ptrs_psi_AST = ptrs_i_AST
 
 ptrs_i_AST = Any(
                Solve(PTRS_ToFull : disprove_AST),
-               First(
-                 PTRS_AST_DecidableRNT,
-	             Solve(PTRS_toPQTRS : pqtrs_AST),
-	             PTRS_AST_DirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]],
-	             PTRS_AST_ExpectedDirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]],
-	             PTRS_AST_DirectMATRO[Allstrict = True, Order = MATRO[Type = COLLAPSINGDPTUPLE[Size = 2, Filter = NOFILTER], Range = 3, Engine = MINISAT]],
-	             Solve(PTRS_toQTRS : qtrs)
+               Any(
+	               PTRS_AST_DecidableRNT,
+	               First(
+	                 Solve(PTRS_toPQTRS : pqtrs_AST),
+	                 PTRS_AST_DirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]],
+	                 PTRS_AST_ExpectedDirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]],
+	                 PTRS_AST_DirectMATRO[Allstrict = True, Order = MATRO[Type = COLLAPSINGDPTUPLE[Size = 2, Filter = NOFILTER], Range = 3, Engine = MINISAT]],
+	                 Solve(PTRS_toQTRS : qtrs)
+	               )
+	             )
 	           )
-	         )
 
 # ============================================================ #
 # ================= outermost AST of PTRS ==================== #
