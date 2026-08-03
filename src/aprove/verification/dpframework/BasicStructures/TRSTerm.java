@@ -1600,148 +1600,52 @@ public abstract class TRSTerm
         return alpha.get(Position.EPSILON);
     }
 
-    private int countPatternOcc(TRSTerm that, TRSSubstitution sigma, patternOccProblem problem) {
-        if (this instanceof TRSVariable) {
-            return 0;
+    /**
+     * The maximum of two {@link OptionalInt}s, where {@link OptionalInt#empty()} represents
+     * "no value" (the smallest element).
+     */
+    private static OptionalInt maxOpt(OptionalInt a, OptionalInt b) {
+        if (a.isEmpty()) {
+            return b;
         }
-
-        var treeRepOfS = this.getTreeRep();
-        var leavesOfS = treeRepOfS.getLeaves();
-        Map<Position, Integer> alpha = new HashMap<>();
-        Map<Position, Integer> beta = new HashMap<>();
-        Map<Position, Integer> gamma = new HashMap<>();
-
-        if (Globals.useAssertions) {
-            //			assert s.getPositionsWithSubTerms() == treeRepOfS.flattenValues(): "Tree rep is not corret";
+        if (b.isEmpty()) {
+            return a;
         }
-
-        // initialize values
-        for (var pair : treeRepOfS.flattenValues()) {
-            alpha.put(pair.x, 0);
-            beta.put(pair.x, 0);
-            gamma.put(pair.x, 0);
-        }
-        Queue<BiTreeNode<Pair<Position, TRSTerm>>> q = new ArrayDeque<>();
-        q.addAll(leavesOfS);
-
-        while (!q.isEmpty()) {
-            var sp = q.remove();
-            var spPos = sp.getValue().x;
-            var spTerm = sp.getValue().y;
-
-            gamma.put(spPos, 1);
-            if (sp.isLeaf()) {
-                if (that.applySubstitution(sigma).equals(spTerm)) {
-                    alpha.put(spPos, 1);
-                } else
-                    alpha.put(spPos, 0);
-            } else {
-                // 1. Update Beta
-                // compute positions of arguments 
-                for (var arg : sp.getChildren()) {
-                    var posOfArg = arg.getValue().x;
-                    beta.compute(spPos, (k, v) -> v += alpha.get(posOfArg));
-                }
-
-                // 2. Update Alpha
-                Integer betaSp = beta.get(spPos);
-                if (that.getMatcher(spTerm) != null) { // t term occurrence s
-                    // 2.1 find m 
-                    int m = 0;
-                    TRSTerm pumpThat = that;
-                    while (m <= spTerm.getSize()) {
-                        // pump with pumping sub
-                        TRSTerm succPump = pumpThat.applySubstitution(sigma);
-                        // check if no occurence or if new pump is equal to previous term 
-                        if (succPump.getMatcher(spTerm) == null
-                            || succPump.equals(pumpThat)) {
-                            break;
-                        }
-                        m++;
-                        pumpThat = succPump;
-                    }
-
-                    //Check if the closing substitution and pumping substitution commute
-                    TRSSubstitution closing = pumpThat.getMatcher(spTerm);
-                    if (!closing.commutes(sigma)) { // Closing and Pumping does not commute -> Do not count this occurrence
-                        alpha.put(spPos, betaSp);
-                    } else { // Closing and Pumping does commute -> Count this occurrence
-                        List<Position> varPos = pumpThat.getVariablePositions()
-                            .values()
-                            .stream()
-                            .flatMap(List::stream)
-                            .toList();
-                        Integer varPosAlphaSum = 0;
-                        for (var pos : varPos) {
-                            if (alpha.containsKey(spPos.append(pos))) {
-                                varPosAlphaSum += alpha.get(spPos.append(pos));
-                            }
-                        }
-
-                        int max;
-                        switch (problem) {
-                            case MAXNM -> {
-                                max = Math.max(betaSp, varPosAlphaSum + m);
-                            }
-                            case MAXOM -> {
-                                max = Math.max(betaSp, m);
-                            }
-                            default -> {
-                                max = 0;
-                                throw new IllegalStateException("patternOccProblem has illegal value");
-                            }
-                        }
-                        alpha.put(spPos, max);
-                    }
-                } else {
-                    alpha.put(spPos, betaSp);
-                }
-
-            }
-
-            // 3. Enqueue Parents if all siblings are processed
-            boolean allProccessed = true;
-            if (!sp.isRoot()) {
-                var siblings = sp.getParent().getChildren();
-                for (var sib : siblings) {
-                    var sPos = sib.getValue().x;
-                    if (gamma.get(sPos) != 1) {
-                        allProccessed = false;
-                        break;
-                    }
-                }
-                if (allProccessed) {
-                    q.add(sp.getParent());
-                }
-            }
-        }
-
-        return alpha.get(Position.EPSILON);
+        return OptionalInt.of(Math.max(a.getAsInt(), b.getAsInt()));
     }
-    
-    private int hasPatternOccHelper(TRSTerm that, TRSSubstitution sigma) {
+
+    /**
+     * Two-state dynamic program computing {@link #maxNMSound} ({@code MAXNM}) and
+     * {@link #maxOMSound} ({@code MAXOM}). For every subterm position we track
+     * <ul>
+     *   <li>{@code a0}: the best sum of multiplicities over any set of pairwise non-overlapping
+     *       (or orthogonal) occurrences in that subterm (unconstrained; always present, &ge; 0),
+     *       and</li>
+     *   <li>{@code a1}: the best such sum over sets that additionally contain at least one
+     *       occurrence whose closing commutes with {@code sigma} (are <em>anchored</em>). This is
+     *       {@link OptionalInt#empty()} exactly when no such anchored set exists at that position.</li>
+     * </ul>
+     * The result is {@code a1} at the root.
+     * <p>
+     * The two modes differ only at an occurrence node: for {@code MAXNM} an occurrence of
+     * multiplicity {@code m} may be combined with nested occurrences sitting in the variable slots
+     * of {@code that}&sigma;<sup>m</sup>; for {@code MAXOM} an orthogonal occurrence excludes
+     * everything strictly below it, so it contributes exactly {@code m}.
+     */
+    private OptionalInt countPatternOccSound(TRSTerm that, TRSSubstitution sigma, patternOccProblem problem) {
         if (this instanceof TRSVariable) {
-            if (this.equals(that)) {
-                return 1;
-            } else {
-                return 0;
-            }
+            return OptionalInt.empty();
         }
 
         var treeRepOfS = this.getTreeRep();
         var leavesOfS = treeRepOfS.getLeaves();
-        Map<Position, Integer> alpha = new HashMap<>();
-        Map<Position, Integer> beta = new HashMap<>();
+        Map<Position, Integer> a0 = new HashMap<>();
+        Map<Position, OptionalInt> a1 = new HashMap<>();
         Map<Position, Integer> gamma = new HashMap<>();
 
-        if (Globals.useAssertions) {
-            //          assert s.getPositionsWithSubTerms() == treeRepOfS.flattenValues(): "Tree rep is not corret";
-        }
-
-        // initialize values
         for (var pair : treeRepOfS.flattenValues()) {
-            alpha.put(pair.x, 0);
-            beta.put(pair.x, 0);
+            a0.put(pair.x, 0);
+            a1.put(pair.x, OptionalInt.empty());
             gamma.put(pair.x, 0);
         }
         Queue<BiTreeNode<Pair<Position, TRSTerm>>> q = new ArrayDeque<>();
@@ -1753,82 +1657,102 @@ public abstract class TRSTerm
             var spTerm = sp.getValue().y;
 
             gamma.put(spPos, 1);
-            if (sp.isLeaf()) {
-                if (that.equals(spTerm)) {
-                    alpha.put(spPos, 1);
-                } else
-                    alpha.put(spPos, 0);
-            } else {
-                // 1. Update Beta
-                // compute positions of arguments 
-                for (var arg : sp.getChildren()) {
-                    var posOfArg = arg.getValue().x;
-                    beta.compute(spPos, (k, v) -> v += alpha.get(posOfArg));
+
+            // beta: best combination over the children (a0 sum, and a0 sum anchored by one child's a1)
+            int betaA0 = 0;
+            OptionalInt bestChildDelta = OptionalInt.empty(); // max over children of (a1[child] - a0[child])
+            for (var arg : sp.getChildren()) {
+                var posOfArg = arg.getValue().x;
+                final int c0 = a0.get(posOfArg);
+                final OptionalInt c1 = a1.get(posOfArg);
+                betaA0 += c0;
+                if (c1.isPresent()) {
+                    bestChildDelta = maxOpt(bestChildDelta, OptionalInt.of(c1.getAsInt() - c0));
                 }
+            }
+            final int betaA0Final = betaA0;
+            final OptionalInt betaA1 =
+                bestChildDelta.isPresent() ? OptionalInt.of(betaA0Final + bestChildDelta.getAsInt()) : OptionalInt.empty();
 
-                // 2. Update Alpha
-                Integer betaSp = beta.get(spPos);
-                if (that.getMatcher(spTerm) != null) { // t term occurrence s
-                    // 2.1 find m 
-                    int m = 1; //Already count one because we just want to check whether one exists.
-                    TRSTerm pumpThat = that;
-                    while (m <= spTerm.getSize()) {
-                        // pump with pumping sub
-                        TRSTerm succPump = pumpThat.applySubstitution(sigma);
-                        // check if no occurence or if new pump is equal to previous term 
-                        if (succPump.getMatcher(spTerm) == null
-                            || succPump.equals(pumpThat)) {
-                            break;
-                        }
-                        m++;
-                        pumpThat = succPump;
+            if (that.getMatcher(spTerm) != null) { // there is a pattern occurrence rooted at spPos
+                // find the maximal multiplicity m
+                int m = 0;
+                TRSTerm pumpThat = that;
+                while (m <= spTerm.getSize()) {
+                    TRSTerm succPump = pumpThat.applySubstitution(sigma);
+                    if (succPump.getMatcher(spTerm) == null || succPump.equals(pumpThat)) {
+                        break;
                     }
+                    m++;
+                    pumpThat = succPump;
+                }
+                final TRSSubstitution closing = pumpThat.getMatcher(spTerm);
+                final boolean closingCommutes = closing.commutes(sigma);
 
-                    //Check if the closing substitution and pumping substitution commute
-                    TRSSubstitution closing = pumpThat.getMatcher(spTerm);
-                    if (!closing.commutes(sigma)) { // Closing and Pumping does not commute -> Do not count this occurrence
-                        alpha.put(spPos, betaSp);
-                    } else { // Closing and Pumping does commute -> Count this occurrence
-                        List<Position> varPos = pumpThat.getVariablePositions()
-                            .values()
-                            .stream()
-                            .flatMap(List::stream)
-                            .toList();
-                        Integer varPosAlphaSum = 0;
-                        for (var pos : varPos) {
-                            if (alpha.containsKey(spPos.append(pos))) {
-                                varPosAlphaSum += alpha.get(spPos.append(pos));
+                final int occA0;
+                final OptionalInt occA1;
+                if (problem == patternOccProblem.MAXNM) {
+                    // Non-overlapping: combine this occurrence with nested occurrences that sit in
+                    // the variable slots of pumpThat = that sigma^m.
+                    final List<Position> varPos = pumpThat.getVariablePositions()
+                        .values()
+                        .stream()
+                        .flatMap(List::stream)
+                        .toList();
+                    int varA0 = 0;
+                    OptionalInt bestVarDelta = OptionalInt.empty(); // max over var slots of (a1 - a0)
+                    for (var pos : varPos) {
+                        final Position child = spPos.append(pos);
+                        if (a0.containsKey(child)) {
+                            final int c0 = a0.get(child);
+                            final OptionalInt c1 = a1.get(child);
+                            varA0 += c0;
+                            if (c1.isPresent()) {
+                                bestVarDelta = maxOpt(bestVarDelta, OptionalInt.of(c1.getAsInt() - c0));
                             }
                         }
-
-                        int max;
-                        max = Math.max(betaSp, m);
-                        alpha.put(spPos, max);
                     }
-                } else {
-                    alpha.put(spPos, betaSp);
+                    occA0 = m + varA0;
+                    // anchored either by this occurrence itself (if its closing commutes) or by a
+                    // commuting occurrence nested in one of its variable slots.
+                    if (closingCommutes) {
+                        occA1 = OptionalInt.of(m + varA0);
+                    } else if (bestVarDelta.isPresent()) {
+                        occA1 = OptionalInt.of(m + varA0 + bestVarDelta.getAsInt());
+                    } else {
+                        occA1 = OptionalInt.empty();
+                    }
+                } else { // MAXOM
+                    // Orthogonal: taking this occurrence excludes everything strictly below it, so it
+                    // contributes exactly m and can only be anchored by itself.
+                    occA0 = m;
+                    occA1 = closingCommutes ? OptionalInt.of(m) : OptionalInt.empty();
                 }
 
+                a0.put(spPos, Math.max(betaA0, occA0));
+                a1.put(spPos, maxOpt(betaA1, occA1));
+            } else {
+                a0.put(spPos, betaA0);
+                a1.put(spPos, betaA1);
             }
 
-            // 3. Enqueue Parents if all siblings are processed
-            boolean allProccessed = true;
+            // enqueue parent once all siblings are processed
             if (!sp.isRoot()) {
                 var siblings = sp.getParent().getChildren();
+                boolean allProcessed = true;
                 for (var sib : siblings) {
-                    var sPos = sib.getValue().x;
-                    if (gamma.get(sPos) != 1) {
-                        allProccessed = false;
+                    if (gamma.get(sib.getValue().x) != 1) {
+                        allProcessed = false;
                         break;
                     }
                 }
-                if (allProccessed) {
+                if (allProcessed) {
                     q.add(sp.getParent());
                 }
             }
         }
 
-        return alpha.get(Position.EPSILON);
+        return a1.get(Position.EPSILON);
     }
 
     /**
@@ -1854,30 +1778,114 @@ public abstract class TRSTerm
     }
 
     /**
-     * Compute maximal non-overlapping multiplicity problem of that in this with pumping substitution sigma.
-     * maxNM(that\sigma^n, this) 
-     * 
-     * @param that Term for which we want to count how often its pattern maximally occurs non-overlapping in this term 
-     * @param sigma pumping substitution 
-     * @return Number of maximal non-overlapping pattern occurrences of that\sigma^n (pattern) in this. 
+     * Compute the maximal non-overlapping multiplicity of the pattern
+     * <that, sigma> in this term, i.e., the maximum over all sets of pairwise
+     * non-overlapping pattern occurrences that contain <em>at least one</em> occurrence whose
+     * closing substitution commutes with {@code sigma}.
+     *
+     * @param that  base term of the pattern
+     * @param sigma pumping substitution of the pattern
+     * @return the maximal commutation-anchored non-overlapping multiplicity (&ge; 0), or
+     *         {@link OptionalInt#empty()} if no such (anchored) set exists, i.e., the pattern does
+     *         not occur with any commuting closing in this term (so this leaf may not soundly be
+     *         counted non-overlapping)
      */
-    public int maxNM(TRSTerm that, TRSSubstitution sigma) {
-        return countPatternOcc(that, sigma, patternOccProblem.MAXNM);
+    public OptionalInt maxNMSound(TRSTerm that, TRSSubstitution sigma) {
+        return countPatternOccSound(that, sigma, patternOccProblem.MAXNM);
     }
 
     /**
-     * Compute maximal orthogonal multiplicity problem of that in this with pumping substitution sigma.
-     * maxOM(that\sigma^n, this) 
-     * 
-     * @param that Term for which we want to count how often its pattern maximally occurs orthogonally in this term 
-     * @param sigma pumping substitution 
-     * @return Number of maximal orthogonal pattern occurrences of that\sigma^n (pattern) in this. 
+     * Compute the maximal orthogonal multiplicity of the pattern
+     * <that, sigma> in this term, i.e., the maximum over all sets of pairwise
+     * <em>orthogonal</em> pattern occurrences that contain <em>at least one</em> occurrence whose
+     * closing substitution commutes with {@code sigma}.
+     *
+     * @param that  base term of the pattern
+     * @param sigma pumping substitution of the pattern
+     * @return the maximal commutation-anchored orthogonal multiplicity (&ge; 0), or
+     *         {@link OptionalInt#empty()} if no such (anchored) set exists
      */
-    public int maxOM(TRSTerm that, TRSSubstitution sigma) {
-        return countPatternOcc(that, sigma, patternOccProblem.MAXOM);
+    public OptionalInt maxOMSound(TRSTerm that, TRSSubstitution sigma) {
+        return countPatternOccSound(that, sigma, patternOccProblem.MAXOM);
     }
-    
-    public boolean hasPatternOcc(TRSTerm that, TRSSubstitution pumping) {
-        return hasPatternOccHelper(that, pumping) >= 1;
+
+    /**
+     * Returns the set of variables of x sigma, i.e., of the term that the pumping
+     * substitution {@code sigma} assigns to the variable x. If x is not in the
+     * domain of {@code sigma}, then x sigma = x, so the result is {x}.
+     */
+    private static Set<TRSVariable> varsOfImage(TRSVariable x, TRSSubstitution sigma) {
+        TRSTerm image = sigma.toMap().get(x);
+        if (image == null) {
+            return Collections.singleton(x);
+        }
+        return image.getVariables();
+    }
+
+    /**
+     * Checks whether the pattern term <this, sigma> is <em>linear</em>, i.e., whether
+     * this sigma<sup>m</sup> is a linear term for all m.
+     * <p>
+     * This implements the sound and complete criterion of the dissertation of Kassing
+     * (Lemma "Detecting Linear Pattern Terms (Sound and Complete)").
+     *
+     * @param sigma the pumping substitution of the pattern term
+     * @return {@code true} iff <this, sigma> is a linear pattern term
+     */
+    public boolean isLinearPatternTerm(TRSSubstitution sigma) {
+        // (i) t must be linear.
+        if (!this.isLinear()) {
+            return false;
+        }
+
+        final Set<TRSVariable> baseVars = this.getVariables();
+
+        // (ii) x sigma must be linear for all x in dom(sigma) reachable from Vars(t) in G_{sigma, t}.
+        // Compute the reachable variables by BFS over edges x -> y for y in Vars(x sigma).
+        final Set<TRSVariable> reachable = new LinkedHashSet<>(baseVars);
+        final Deque<TRSVariable> worklist = new ArrayDeque<>(baseVars);
+        while (!worklist.isEmpty()) {
+            final TRSVariable x = worklist.remove();
+            for (final TRSVariable y : varsOfImage(x, sigma)) {
+                if (reachable.add(y)) {
+                    worklist.add(y);
+                }
+            }
+        }
+        for (final TRSVariable x : reachable) {
+            final TRSTerm image = sigma.toMap().get(x);
+            if (image != null && !image.isLinear()) {
+                return false;
+            }
+        }
+
+        // (iii) Vars(x sigma) and Vars(y sigma) must be disjoint for all concurrent pairs (x, y).
+        // Compute the concurrent pairs as the fixed point of the active variable sets S_m:
+        // S_0 = Vars(t), S_{m+1} = union over x in S_m of Vars(x sigma).
+        final Set<Set<TRSVariable>> seen = new HashSet<>();
+        final Set<Pair<TRSVariable, TRSVariable>> concurrent = new HashSet<>();
+        Set<TRSVariable> active = new LinkedHashSet<>(baseVars);
+        while (!active.isEmpty() && seen.add(active)) {
+            final List<TRSVariable> activeList = new ArrayList<>(active);
+            for (int i = 0; i < activeList.size(); i++) {
+                for (int j = i + 1; j < activeList.size(); j++) {
+                    concurrent.add(new Pair<>(activeList.get(i), activeList.get(j)));
+                }
+            }
+            final Set<TRSVariable> next = new LinkedHashSet<>();
+            for (final TRSVariable x : active) {
+                next.addAll(varsOfImage(x, sigma));
+            }
+            active = next;
+        }
+        for (final Pair<TRSVariable, TRSVariable> pair : concurrent) {
+            final Set<TRSVariable> imgX = new HashSet<>(varsOfImage(pair.x, sigma));
+            imgX.retainAll(varsOfImage(pair.y, sigma));
+            if (!imgX.isEmpty()) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

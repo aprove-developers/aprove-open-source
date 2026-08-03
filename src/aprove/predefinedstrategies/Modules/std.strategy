@@ -1789,6 +1789,7 @@ declare CpxRntsCompleteCofloco = aprove.verification.complexity.CpxRntsProblem.P
 declare PTRS_toQTRS = aprove.verification.probabilistic.Termination.PTRSProblem.Processors.PTRS_ToQTRSProcessor
 declare PTRS_toPQTRS = aprove.verification.probabilistic.Termination.PTRSProblem.Processors.PTRS_ToPQTRSProcessor
 declare PTRS_ToInnermost = aprove.verification.probabilistic.Termination.PTRSProblem.Processors.PTRS_ToInnermostProcessor
+declare PTRS_ToFull = aprove.verification.probabilistic.Termination.PTRSProblem.Processors.PTRS_ToFullProcessor
 
 
 #PTRS Processors (AST)
@@ -1799,6 +1800,7 @@ declare PTRS_AST_DirectMATRO = aprove.verification.probabilistic.Termination.PTR
 declare PTRS_AST_LoopFinder = aprove.verification.probabilistic.Termination.PTRSProblem.AST.Processors.PTRS_AST_LoopFinderProcessor
 declare PTRS_AST_LoopWalkFinder = aprove.verification.probabilistic.Termination.PTRSProblem.AST.Processors.PTRS_AST_LoopWalkFinderProcessor
 declare PTRS_AST_DecidableRNT = aprove.verification.probabilistic.Termination.PTRSProblem.AST.Processors.PTRS_AST_DecidableRNTProcessor
+declare PTRS_AST_OutermostToInnermost = aprove.verification.probabilistic.Termination.PTRSProblem.AST.Processors.PTRS_AST_OutermostToInnermostProcessor
 
 declare PQTRS_AST_toADP = aprove.verification.probabilistic.Termination.PTRSProblem.AST.Processors.PQTRS_AST_ToADPProblemProcessor
 
@@ -1839,6 +1841,7 @@ declare PTRS_Cpx_DirectPOLO = aprove.verification.probabilistic.Complexity.PTRSP
 declare PTRS_Cpx_ToPQTRS = aprove.verification.probabilistic.Complexity.PTRSProblem.Processors.PTRS_Cpx_ToPQTRSProcessor
 declare PTRS_Cpx_ToInnermost = aprove.verification.probabilistic.Complexity.PTRSProblem.Processors.PTRS_Cpx_ToInnermostProcessor
 declare PTRS_Cpx_DerivationalToRuntimeProcessor = aprove.verification.probabilistic.Complexity.PTRSProblem.Processors.PTRS_Cpx_DerivationalToRuntimeProcessor
+declare PTRS_Cpx_OutermostToInnermost = aprove.verification.probabilistic.Complexity.PTRSProblem.Processors.PTRS_Cpx_OutermostToInnermostProcessor
 
 declare PQTRS_Cpx_ToADP = aprove.verification.probabilistic.Complexity.PTRSProblem.Processors.PQTRS_Cpx_ToADPProcessor
 

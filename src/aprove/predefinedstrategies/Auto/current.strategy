@@ -1890,11 +1890,9 @@ ptrs_i_TERM = PTRS_toQTRS : qtrs
 # =============== (innermost) AST of PTRS ==================== #
 # ============================================================ #
 
-ptrs_AST = CombineParallel(disprove_AST, prove_AST)
+ptrs_AST = Any(disprove_AST, prove_AST)
 
-# ptrs_AST = Solve(PTRS_AST_DecidableRNT)
-
-disprove_AST = CombineParallel(
+disprove_AST = Any(
                  Timer(5000,
 	               PTRS_AST_LoopWalkFinder[Allcuts = False]
 	             ),
@@ -1906,32 +1904,48 @@ disprove_AST = CombineParallel(
 	             )
                )
 
-prove_AST = First(
+prove_AST = Any(
              PTRS_AST_DecidableRNT,
-			 Solve(PTRS_ToInnermost : RunDefaultStrategyForObligation),
-             Solve(PTRS_toPQTRS : pqtrs_AST),
-             PTRS_AST_DirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]],
-             PTRS_AST_ExpectedDirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]],
-             PTRS_AST_DirectMATRO[Allstrict = True, Order = MATRO[Type = COLLAPSINGDPTUPLE[Size = 2, Filter = NOFILTER], Range = 3, Engine = MINISAT]],
-             Solve(PTRS_toQTRS : qtrs)
-           )
-           
-ptrs_psi_AST = ptrs_i_AST
-
-ptrs_i_AST = First(
-               PTRS_AST_DecidableRNT,
-	           Solve(PTRS_toPQTRS : pqtrs_AST),
+             First(
+    	       Solve(PTRS_ToInnermost : RunDefaultStrategyForObligation),
+               Solve(PTRS_toPQTRS : pqtrs_AST),
 	           PTRS_AST_DirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]],
 	           PTRS_AST_ExpectedDirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]],
 	           PTRS_AST_DirectMATRO[Allstrict = True, Order = MATRO[Type = COLLAPSINGDPTUPLE[Size = 2, Filter = NOFILTER], Range = 3, Engine = MINISAT]],
 	           Solve(PTRS_toQTRS : qtrs)
 	         )
+           )
+           
+ptrs_psi_AST = ptrs_i_AST
+
+ptrs_i_AST = Any(
+               Solve(PTRS_ToFull : disprove_AST),
+               Any(
+	               PTRS_AST_DecidableRNT,
+	               First(
+	                 Solve(PTRS_toPQTRS : pqtrs_AST),
+	                 PTRS_AST_DirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]],
+	                 PTRS_AST_ExpectedDirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]],
+	                 PTRS_AST_DirectMATRO[Allstrict = True, Order = MATRO[Type = COLLAPSINGDPTUPLE[Size = 2, Filter = NOFILTER], Range = 3, Engine = MINISAT]],
+	                 Solve(PTRS_toQTRS : qtrs)
+	               )
+	             )
+	           )
 
 # ============================================================ #
 # ================= outermost AST of PTRS ==================== #
 # ============================================================ #
 
-ptrs_o_AST = ptrs_AST
+ptrs_o_AST = Any(
+               Solve(PTRS_ToFull : disprove_AST),
+               First(
+                 PTRS_AST_DirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]],
+                 PTRS_AST_ExpectedDirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]],
+                 PTRS_AST_DirectMATRO[Allstrict = True, Order = MATRO[Type = COLLAPSINGDPTUPLE[Size = 2, Filter = NOFILTER], Range = 3, Engine = MINISAT]]
+               ),
+               Solve(PTRS_ToInnermost : RunDefaultStrategyForObligation),
+               Solve(PTRS_AST_OutermostToInnermost : RunDefaultStrategyForObligation)
+             )
 
 # ============================================================ #
 # ===================== AST of PQTRS ========================= #
@@ -1991,9 +2005,9 @@ probTransIncr = Repeat(1,*,
 # ============== (innermost) SAST of PTRS ==================== #
 # ============================================================ #
 
-ptrs_SAST = CombineParallel(disprove_SAST, prove_SAST)
+ptrs_SAST = Any(disprove_SAST, prove_SAST)
 
-disprove_SAST = CombineParallel(
+disprove_SAST = Any(
                   Timer(10000,
 	                PTRS_SAST_LoopFinder[Allcuts = False]
 	              ),
@@ -2004,13 +2018,16 @@ disprove_SAST = CombineParallel(
                
 prove_SAST = PTRS_SAST_DirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]]
           
-ptrs_i_SAST = First(
-			   Prove(
-		         Timer(5000,
-			       PTRS_SAST_DirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]]
-			     )
-			   ),
-               PTRS_toPQTRS : pqtrs_SAST
+ptrs_i_SAST = Any(
+			   Solve(PTRS_ToFull : disprove_SAST),
+			   First(
+			     Prove(
+			       Timer(5000,
+			         PTRS_SAST_DirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]]
+			       )
+			     ),
+			     PTRS_toPQTRS : pqtrs_SAST
+			   )
              )
 
 pqtrs_SAST = PQTRS_SAST_toADP : posqdt_SAST
@@ -2045,24 +2062,34 @@ cpx_ptrs = CombineParallel(
                  Solve(PTRS_Cpx_ToInnermost : RunDefaultStrategyForObligation),
                  Solve(PTRS_Cpx_DerivationalToRuntimeProcessor : RunDefaultStrategyForObligation)
                ),
+               Solve(ptrs_polo),
                Solve(ptrs_polo_exp),
-               Timer(30000,
+               Timer(20000,
 	              PTRS_Cpx_LoopFinder[Allcuts = True]
 	           )
              )
           
 cpx_ptrs_i = CombineParallel(
                Solve(PTRS_Cpx_DerivationalToRuntimeProcessor : RunDefaultStrategyForObligation),
+               Solve(ptrs_polo),
                Solve(ptrs_polo_exp)
              )
-             
+
+cpx_ptrs_o = CombineParallel(
+               Solve(PTRS_Cpx_OutermostToInnermost : RunDefaultStrategyForObligation),
+               Solve(ptrs_polo),
+               Solve(ptrs_polo_exp)
+             )
+
 cpx_ptrs_b = CombineParallel(
                Solve(PTRS_Cpx_ToInnermost : RunDefaultStrategyForObligation),
+               Solve(ptrs_polo),
                Solve(ptrs_polo_exp)
              )
           
 cpx_ptrs_i_b = CombineParallel(
                Solve(PTRS_Cpx_ToPQTRS : cpx_pqtrs_i),
+               Solve(ptrs_polo),
                Solve(ptrs_polo_exp)
              )
 
@@ -2072,7 +2099,9 @@ cpx_pqtrs_i = CombineParallel(
               )
               
 ptrs_polo = First(
-			  Timer(5000, PTRS_Cpx_DirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]])
+              Timer(5000, PTRS_Cpx_DirectPOLO[Allstrict = True, Constant = True, Order = POLO[Degree = 1, Range = 10, Engine = MINISAT]]),
+              Timer(5000, PTRS_Cpx_DirectPOLO[Allstrict = True, Order = POLO[Degree = 1, Range = 10, Engine = MINISAT]]),
+              Timer(5000, PTRS_Cpx_DirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]])
             )
 
 ptrs_polo_exp = First(
@@ -2096,8 +2125,13 @@ cpx_adp = Repeat(0,*,
 	         )
 	         
 cpx_adp_rpp = First(
+                Timer(5000, ADP_Cpx_ReductionPairProcessor[Allstrict = False, Constant = True, Order = POLO[Degree = 1, Range = 5, Engine = MINISAT]]),
+                Timer(5000, ADP_Cpx_ReductionPairProcessor[Allstrict = False, Order = POLO[Degree = 1, Range = 1, Engine = MINISAT]]),
                 Timer(5000, ADP_Cpx_ReductionPairProcessor[Allstrict = False, Order = POLO[Degree = 1, Range = 10, Engine = MINISAT]]),
-                Timer(20000, ADP_Cpx_ReductionPairProcessor[Allstrict = False, Exponential = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]])
+                Timer(10000, ADP_Cpx_ReductionPairProcessor[Allstrict = False, Order = POLO[Degree = 2, Range = 10, Engine = MINISAT]]),
+                Timer(10000, ADP_Cpx_ReductionPairProcessor[Allstrict = False, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]]),
+                Timer(20000, ADP_Cpx_ReductionPairProcessor[Allstrict = False, Exponential = True, Order = POLO[Degree = 1, Range = 10, Engine = MINISAT]]),
+                Timer(20000, ADP_Cpx_ReductionPairProcessor[Allstrict = False, Exponential = True, Order = POLO[Degree = -1, Range = 100, Engine = MINISAT]])
               )
 
 cpx_adp_defaults = First(

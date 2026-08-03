@@ -245,8 +245,10 @@ public class ObligationCreator {
                 return new PTRSProblem(this.probabilisticRules, strat, ProbabilisticTerminationResult.SAST, this.basic);
                 
             case (ObligationCreator.bitProbabilistic | ObligationCreator.bitComplexity | ObligationCreator.bitConstructorbased | ObligationCreator.bitInnermost):
+            case (ObligationCreator.bitProbabilistic | ObligationCreator.bitComplexity | ObligationCreator.bitConstructorbased | ObligationCreator.bitOutermost):
             case (ObligationCreator.bitProbabilistic | ObligationCreator.bitComplexity | ObligationCreator.bitConstructorbased):
             case (ObligationCreator.bitProbabilistic | ObligationCreator.bitComplexity | ObligationCreator.bitInnermost):
+            case (ObligationCreator.bitProbabilistic | ObligationCreator.bitComplexity | ObligationCreator.bitOutermost):
             case (ObligationCreator.bitProbabilistic | ObligationCreator.bitComplexity):
                 this.language = Language.CpxPTRS;
                 return new PTRS_Cpx_Problem(this.probabilisticRules, strat, ProbabilisticTerminationResult.SAST, this.basic);

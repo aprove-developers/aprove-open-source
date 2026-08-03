@@ -33,17 +33,24 @@ public class PTRS_ToInnermostProcessor extends PTRS_ProblemProcessor {
             return false;
         }
 
+        //For strategies other than full rewriting (e.g., outermost), the equivalence to
+        //innermost rewriting additionally requires non-erasingness.
+        if (R.getRewriteStrategy() != RewriteStrategy.FULL && !(R.isNonErasing())) {
+            return false;
+        }
+
         return true;
     }
 
     @Override
     protected Result processPTRSProblem(final PTRSProblem R, final Abortion aborter) throws AbortionException {
-        //Since the processor is applicable, we know that R is left-linear and non-overlapping.
-        //Only check spareness (in case of basic start terms) or right-linearity.
+        //Since the processor is applicable, we know that R is left-linear and non-overlapping
+        //(and non-erasing in case of a strategy other than full rewriting).
+        //Only check spareness (in case of full rewriting with basic start terms) or right-linearity.
         if (R.isRightLinear()) {
             final var newPTrs = PTRSProblem.create(ImmutableCreator.create(R.getPR()), RewriteStrategy.INNERMOST, R.getTarget(), R.isBasic());
             return ResultFactory.proved(newPTrs, YNMImplication.EQUIVALENT, new ToInnermostProof(null, false, R));
-        } else if (R.isBasic()) {
+        } else if (R.getRewriteStrategy() == RewriteStrategy.FULL && R.isBasic()) {
             final Set<Rule> rules = new LinkedHashSet<>();
             for (final var pr : R.getPR()) {
                 for (final var r : pr.getNonProbabilisticRepresentation()) {
@@ -86,7 +93,13 @@ public class PTRS_ToInnermostProcessor extends PTRS_ProblemProcessor {
             } else {
                 proof.append(o.escape("right-linear"));
             }
-            proof.append(o.escape(", so it is " + this.R.getTarget() + " iff it is innermost " + this.R.getTarget() + "."));
+            if (this.R.getRewriteStrategy() != RewriteStrategy.FULL) {
+                proof.append(o.escape(" and non-erasing"));
+                proof.append(o.escape(", so it is " + this.R.getRewriteStrategy().getRepresentation() + " "
+                    + this.R.getTarget() + " iff it is innermost " + this.R.getTarget() + "."));
+            } else {
+                proof.append(o.escape(", so it is " + this.R.getTarget() + " iff it is innermost " + this.R.getTarget() + "."));
+            }
             proof.append(o.newline());
             if (this.onlyNDProof) {
                 proof.append(o.escape("Proof of spareness:"));
