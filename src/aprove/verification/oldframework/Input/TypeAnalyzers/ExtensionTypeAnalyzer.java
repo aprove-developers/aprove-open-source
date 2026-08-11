@@ -3,6 +3,7 @@ package aprove.verification.oldframework.Input.TypeAnalyzers;
 import java.io.*;
 import java.util.*;
 
+import aprove.input.Programs.haskell.StrictPositivityException;
 import aprove.input.Utility.*;
 import aprove.verification.oldframework.Input.*;
 import aprove.verification.oldframework.Rewriting.*;

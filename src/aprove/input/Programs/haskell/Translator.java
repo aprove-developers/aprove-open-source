@@ -348,6 +348,10 @@ public class Translator extends aprove.verification.oldframework.Input.Translato
             while (mods.needMoreModules()) {
                 this.loadModule(mods.getNextNeededModule(), mods);
             }
+
+            final PositivityChecker positivityChecker = new PositivityChecker();
+            positivityChecker.check(mods);
+
             this.setState(mods.buildHaskellProgram());
             //JTreeDialog.create("Modules",new StructureTreeModel(new ReflectTreeEntry("","Modules",mods))).show();
 
@@ -384,6 +388,12 @@ public class Translator extends aprove.verification.oldframework.Input.Translato
         } catch (final ParserException e) {
             this.handlePLException(e);
             this.setState(null);
+        }catch (final StrictPositivityException e) {
+            final ParseError pe = new ParseError(ParseError.ERROR);
+            pe.setMessage(e.getMessage());
+            this.getErrors().add(pe);
+            this.setState(null);
+//            throw e;
         } catch (final LexerException e) {
             this.handlePLException(e);
             this.setState(null);
