@@ -12,10 +12,10 @@ import aprove.verification.oldframework.Utility.VerbosityLevel;
 
 public class QuasiLinearLinearizedDecreasingProof extends Proof.DefaultProof {
 
-    private final Map<FunctionSymbol, QuasiLinearLinearizedDecreasingProcessor.NestedSort> sorts;
+    private final Map<FunctionSymbol, QuasiLinearLinearizedDecreasingProcessor.FunctionApplicationSort> sorts;
     private final Set<Rule> nonLinearRules;
 
-    public QuasiLinearLinearizedDecreasingProof(Map<FunctionSymbol, QuasiLinearLinearizedDecreasingProcessor.NestedSort> sorts, Set<Rule> nonLinearRules) {
+    QuasiLinearLinearizedDecreasingProof(Map<FunctionSymbol, QuasiLinearLinearizedDecreasingProcessor.FunctionApplicationSort> sorts, Set<Rule> nonLinearRules) {
         this.sorts = sorts;
         this.nonLinearRules = nonLinearRules;
     }
