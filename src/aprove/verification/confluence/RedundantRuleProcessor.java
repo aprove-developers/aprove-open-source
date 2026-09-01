@@ -33,6 +33,11 @@ public class RedundantRuleProcessor implements Processor {
 
         var newConfTRSProblem = removeRedundantRules(confTRSProblem, aborter);
 
+        // If we couldn't transform the rule set give up early, such that future processors can prove and disprove confluence.
+        // The sound implication would disregard any proofs for non-confluence.
+        if (confTRSProblem.getRules().equals(newConfTRSProblem.getRules()))
+            return ResultFactory.unsuccessful();
+
         return ResultFactory.provedAnd(List.of(newConfTRSProblem), YNMImplication.SOUND, new RedundantRuleProof(newConfTRSProblem.getRules()));
     }
 
@@ -75,12 +80,18 @@ public class RedundantRuleProcessor implements Processor {
                 .flatMap(r -> r.getRight()
                         .rewrite(incrementalRuleMap.toImmutable())
                         .stream()
+                        .filter(rewrite -> !r.getLeft().equals(rewrite))
                         .map(rewrite -> Rule.create(r.getLeft(), rewrite)))
                 .collect(Collectors.toSet());
         rules.addAll(rhsRules);
 
         // Remove rules that others can simulate
         var fng = new FreshNameGenerator(incrementalRuleMap.getDefinedSymbols(), FreshNameGenerator.VARIABLES);
+        for (final Rule rule : rules) {
+            fng.lockHasNames(rule.getLeft().getVariables());
+            fng.lockHasNames(rule.getRight().getVariables());
+        }
+
         rules.removeIf(rule -> {
             incrementalRuleMap.removeRule(rule);
             var doRemove = canRuleBeSimulated(incrementalRuleMap.toImmutable(), fng, rule);
