@@ -11,10 +11,7 @@ import aprove.strategies.Abortions.AbortionException;
 import aprove.strategies.Annotations.ParamsViaArgumentObject;
 import aprove.strategies.ExecutableStrategies.RuntimeInformation;
 import aprove.verification.confluence.Utility.CriticalPairInfo;
-import aprove.verification.dpframework.BasicStructures.Rule;
-import aprove.verification.dpframework.BasicStructures.TRSFunctionApplication;
-import aprove.verification.dpframework.BasicStructures.TRSTerm;
-import aprove.verification.dpframework.BasicStructures.TRSVariable;
+import aprove.verification.dpframework.BasicStructures.*;
 import aprove.verification.dpframework.Orders.POLO;
 import aprove.verification.dpframework.Processor;
 import aprove.verification.dpframework.Result;
@@ -56,24 +53,25 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
         if (oneStepUnfolding.size() > arguments.MaxNumberOfUnfoldedRules)
             return ResultFactory.unsuccessful();
 
+        var fng = new FreshNameGenerator(FreshNameGenerator.VARIABLES);
         var newConfTrsProblem = ConfTRSProblem.create(ImmutableCreator.create(oneStepUnfolding));
-        var criticalPairs = newConfTrsProblem.getCriticalPairs().getAllFoundCriticalPairs(aborter)
+        var candidates = newConfTrsProblem.getCriticalPairs().getAllFoundCriticalPairs(aborter)
                 .stream()
-                .filter(cp -> !cp.isTrivial())
-                .filter(cp -> cp.s().isGroundTerm() && cp.t().isGroundTerm())
-                .sorted(Comparator.comparingInt((CriticalPairInfo cp) -> (cp.s().getSize() + cp.t().getSize())))
+                .filter(cpInfo -> !cpInfo.isTrivial())
+                .map(cpInfo -> ground(cpInfo, fng))
+                .sorted(Comparator.comparingInt((CriticalPairInfo cpInfo) -> (cpInfo.s().getSize() + cpInfo.t().getSize())))
                 .toList();
 
         int limit = arguments.MaxNumberOfCriticalPairs;
-        for (var candidate : criticalPairs) {
+        for (var candidate : candidates) {
             if (limit <= 0)
                 break;
 
             var state = new PolynomialInterpretationNonConfluenceProcessorState(arguments, confTrsProblem, smtEngine, aborter);
 
-            var interpretation = state.disproveByPolynomialInterpretation(candidate.s(), candidate.t());
+            /*var interpretation = state.disproveByPolynomialInterpretation(candidate.s(), candidate.t());
             if (interpretation != null)
-                return ResultFactory.disproved(new NotCRProof(candidate.divergence(), candidate.s(), candidate.t()));
+                return ResultFactory.disproved(new NotCRProof(candidate.divergence(), candidate.s(), candidate.t()));*/
 
             var polynomialOrder = state.disproveByOrdering(candidate.s(), candidate.t());
             if (polynomialOrder != null)
@@ -95,6 +93,28 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
         public int MaxNumberOfCriticalPairs = 100;
         public int MaxNumberOfUnfoldedRules = 1000;
         public int Modulus = 3;
+    }
+
+    public CriticalPairInfo ground(CriticalPairInfo cpInfo, FreshNameGenerator fng) {
+        var variables = new HashSet<TRSVariable>();
+        variables.addAll(cpInfo.divergence().getVariables());
+        variables.addAll(cpInfo.s().getVariables());
+        variables.addAll(cpInfo.t().getVariables());
+        if (variables.isEmpty())
+            return cpInfo;
+
+        var substitutionMap = new LinkedHashMap<TRSVariable, TRSFunctionApplication>();
+        for (var v : variables) {
+            var constantName = fng.getFreshName("c_" + v.getName(), false);
+            var constant = TRSFunctionApplication.createConstant(constantName);
+            substitutionMap.putIfAbsent(v, constant);
+        }
+
+        var substitution = TRSSubstitution.create(ImmutableCreator.create(substitutionMap));
+        var newDivergence = cpInfo.divergence().applySubstitution(substitution);
+        var newS = cpInfo.s().applySubstitution(substitution);
+        var newT = cpInfo.t().applySubstitution(substitution);
+        return new CriticalPairInfo(cpInfo.sRule(), cpInfo.tRule(), newS, newT, cpInfo.isRootOverlap(), newDivergence, cpInfo.p());
     }
 
     private static Set<Rule> computeOneStepUnfolding(Set<Rule> rules) {
@@ -273,10 +293,10 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
             return result;
         }
 
-        private void addConstraints(LinearPolynomial encodedRule, ConstraintType constantType, List<Diophantine> constraints) {
-            var constantConstraint = Diophantine.create(encodedRule.constantPart(), constantType);
+        private void addConstraints(LinearPolynomial encodedTerm, ConstraintType constraintType, List<Diophantine> constraints) {
+            var constantConstraint = Diophantine.create(encodedTerm.constantPart(), constraintType);
             constraints.add(constantConstraint);
-            for (var coefficient : encodedRule.coefficientsForVariable().values()) {
+            for (var coefficient : encodedTerm.coefficientsForVariable().values()) {
                 var coefficientGreaterEqualsZero = Diophantine.create(coefficient, ConstraintType.GE);
                 constraints.add(coefficientGreaterEqualsZero);
             }
@@ -330,6 +350,8 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
 
             var result = new LinearPolynomial(coefficients.getFirst(), new LinkedHashMap<>());
 
+            // a_f,i+1 * encode(arg_i(term)) for 0 <= i < f.arity
+            // We ignore the constant term a_f,0
             for (int i = 0; i < functionApplication.getArity(); i++) {
                 var functionCoefficient = coefficients.get(i+1);
                 var argumentCoefficient = encodeTerm(functionApplication.getArgument(i));
