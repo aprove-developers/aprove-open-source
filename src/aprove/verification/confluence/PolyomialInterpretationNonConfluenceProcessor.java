@@ -69,9 +69,9 @@ public class PolyomialInterpretationNonConfluenceProcessor implements Processor 
 
             var state = new PolynomialInterpretationNonConfluenceProcessorState(arguments, confTrsProblem, smtEngine, aborter);
 
-            /*var interpretation = state.disproveByPolynomialInterpretation(candidate.s(), candidate.t());
+            var interpretation = state.disproveByPolynomialInterpretation(candidate.s(), candidate.t());
             if (interpretation != null)
-                return ResultFactory.disproved(new NotCRProof(candidate.divergence(), candidate.s(), candidate.t()));*/
+                return ResultFactory.disproved(new NotCRProof(candidate.divergence(), candidate.s(), candidate.t()));
 
             var polynomialOrder = state.disproveByOrdering(candidate.s(), candidate.t());
             if (polynomialOrder != null)
