@@ -90,13 +90,11 @@ public class RedundantRuleProcessor implements Processor {
         });
 
         // (del) A rule l -> r is redundant and may be removed only if l can still reach r in the
-        // remaining TRS (l ->* r). This preserves ->* and hence confluence [NAGELE15]. Note that mere
-        // joinability (l ->* u <-* r) is NOT sufficient: it can drop a rule whose left side can no
-        // longer reach its right side, turning a non-confluent TRS into a confluent one.
+        // remaining TRS (l ->* r). This preserves ->* and hence confluence [NAGELE15].
         rules.removeIf(rule -> {
             incrementalRuleMap.removeRule(rule);
             var joinTree = new TrsTermJoinTree(incrementalRuleMap.toImmutable(), rule.getLeft(), rule.getRight());
-            var result = joinTree.isRightTermReachable(arguments.ReachabilityLimit, aborter);
+            var result = joinTree.areTermsJoinable(0, arguments.ReachabilityLimit, CriticalPairs.SearchMode.EXIT_ON_FIRST_JOIN, aborter);
             var doRemove = result instanceof JoinableResult.Joinable;
             if (!doRemove)
                 incrementalRuleMap.addRule(rule);
