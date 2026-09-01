@@ -252,8 +252,6 @@ public class DecreasingDiagramsRuleLabellingProcessor implements Processor {
                         if (rightWeights.isEmpty())
                             continue;
                         var constraintRhs = SimplePolynomial.plus(rightWeights);
-                        if (constraintLhs.equals(constraintRhs))
-                            continue;
                         var dio = Diophantine.create(constraintLhs, constraintRhs, constraintType);
                         var dioFormula = ff.buildTheoryAtom(dio);
                         constraints.add(dioFormula);
