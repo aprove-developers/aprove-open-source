@@ -36,12 +36,12 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-public class PolyomialInterpretationNonConfluenceProcessor implements Processor {
+public class PolynomialInterpretationNonConfluenceProcessor implements Processor {
     private final Arguments arguments;
     private final SMTEngine smtEngine = new SMTLIBEngine();
 
     @ParamsViaArgumentObject
-    public PolyomialInterpretationNonConfluenceProcessor(Arguments arguments) {
+    public PolynomialInterpretationNonConfluenceProcessor(Arguments arguments) {
         this.arguments = arguments;
     }
 
