@@ -96,7 +96,7 @@ public class TrsTermJoinTree {
         Set<BiTreeNode<RewriteStep>> newLayer = new LinkedHashSet<>();
         for (BiTreeNode<RewriteStep> lastLayerNode : lastLayer) {
             aborter.checkAbortion();
-            var possibleRewrites = lastLayerNode.getValue().substitutedTerm().computePossibleRewrites(rules, freshNames);
+            var possibleRewrites = lastLayerNode.getValue().substitutedTerm().computePossibleRewrites(rules);
 
             // No further rewrites possible, we found a normal formal
             if (possibleRewrites.isEmpty()){

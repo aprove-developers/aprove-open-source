@@ -1072,7 +1072,7 @@ public abstract class TRSTerm
         return rewritings;
     }
 
-    public Set<RewriteStep> computePossibleRewrites(Map<FunctionSymbol, ? extends Set<Rule>> rules, FreshNameGenerator freshNames) {
+    public Set<RewriteStep> computePossibleRewrites(Map<FunctionSymbol, ? extends Set<Rule>> rules) {
         final Set<RewriteStep> rewritings = new LinkedHashSet<>();
         for (Pair<Position, TRSTerm> actPair : this.getPositionsWithSubTerms()) {
             final TRSTerm subterm = actPair.y;
@@ -1088,15 +1088,6 @@ public abstract class TRSTerm
                 TRSSubstitution matcher = lhs.getMatcher(subterm);
                 if (matcher == null)
                     continue;
-
-                final Map<TRSVariable, TRSTerm> freshVars = new LinkedHashMap<>(matcher.toMap());
-                for (TRSVariable var : actRule.getRight().getVariables()) {
-                    if (!freshVars.containsKey(var)) {
-                        freshVars.put(var, TRSTerm.createVariable(freshNames.getFreshName("x0", false)));
-                    }
-                }
-
-                matcher = TRSSubstitution.create(ImmutableCreator.create(freshVars), true);
 
                 TRSTerm substituted = replaceAt(actPair.x, actRule.getRight().applySubstitution(matcher));
                 RewriteStep rewriteStep = new RewriteStep(this, actPair.x, actRule, substituted);

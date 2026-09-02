@@ -47,17 +47,16 @@ public class RedundantRuleProcessor implements Processor {
     }
 
     public static class Arguments {
-        /** Maximum number of rewrite steps searched when checking whether a rule's left side reaches its right side. **/
         public int ReachabilityLimit = 6;
     }
 
-    private static boolean canRuleBeSimulated(Map<FunctionSymbol, ? extends Set<Rule>> currentRuleMap, FreshNameGenerator fng, Rule rule) {
-        return rule.getLeft().computePossibleRewrites(currentRuleMap, fng).stream().anyMatch(step -> step.substitutedTerm().equals(rule.getRight()));
+    private static boolean canRuleBeSimulated(Map<FunctionSymbol, ? extends Set<Rule>> currentRuleMap, Rule rule) {
+        return rule.getLeft().computePossibleRewrites(currentRuleMap).stream().anyMatch(step -> step.substitutedTerm().equals(rule.getRight()));
     }
 
     private ConfTRSProblem removeRedundantRules(ConfTRSProblem confTRSProblem, Abortion aborter) {
         Set<Rule> rules = new LinkedHashSet<>(confTRSProblem.getRules());
-        var incrementalRuleMap = new IncrementalRuleMap(rules);
+        var ruleMap = new IncrementalRuleMap(rules);
 
         // (js)
         var criticalPairs = confTRSProblem.getCriticalPairs();
@@ -78,7 +77,7 @@ public class RedundantRuleProcessor implements Processor {
         // (rhs)
         Set<Rule> rhsRules = rules.stream()
                 .flatMap(r -> r.getRight()
-                        .rewrite(incrementalRuleMap.toImmutable())
+                        .rewrite(ruleMap.getRuleMap())
                         .stream()
                         .filter(rewrite -> !r.getLeft().equals(rewrite))
                         .map(rewrite -> Rule.create(r.getLeft(), rewrite)))
@@ -86,30 +85,20 @@ public class RedundantRuleProcessor implements Processor {
         rules.addAll(rhsRules);
 
         // Remove rules that others can simulate
-        var fng = new FreshNameGenerator(incrementalRuleMap.getDefinedSymbols(), FreshNameGenerator.VARIABLES);
-        for (final Rule rule : rules) {
-            fng.lockHasNames(rule.getLeft().getVariables());
-            fng.lockHasNames(rule.getRight().getVariables());
-        }
-
         rules.removeIf(rule -> {
-            incrementalRuleMap.removeRule(rule);
-            var doRemove = canRuleBeSimulated(incrementalRuleMap.toImmutable(), fng, rule);
-            if (!doRemove)
-                incrementalRuleMap.addRule(rule);
-            return doRemove;
+            var newRules = new LinkedHashSet<>(rules);
+            newRules.remove(rule);
+            return canRuleBeSimulated(new IncrementalRuleMap(newRules).getRuleMap(), rule);
         });
 
         // (del) A rule l -> r is redundant and may be removed only if l can still reach r in the
         // remaining TRS (l ->* r). This preserves ->* and hence confluence [NAGELE15].
         rules.removeIf(rule -> {
-            incrementalRuleMap.removeRule(rule);
-            var joinTree = new TrsTermJoinTree(incrementalRuleMap.toImmutable(), rule.getLeft(), rule.getRight());
+            var newRules = new LinkedHashSet<>(rules);
+            newRules.remove(rule);
+            var joinTree = new TrsTermJoinTree(new IncrementalRuleMap(newRules).getRuleMap(), rule.getLeft(), rule.getRight());
             var result = joinTree.areTermsJoinable(0, arguments.ReachabilityLimit, CriticalPairs.SearchMode.EXIT_ON_FIRST_JOIN, aborter);
-            var doRemove = result instanceof JoinableResult.Joinable;
-            if (!doRemove)
-                incrementalRuleMap.addRule(rule);
-            return doRemove;
+            return result instanceof JoinableResult.Joinable;
         });
 
         return ConfTRSProblem.create(ImmutableCreator.create(rules));
