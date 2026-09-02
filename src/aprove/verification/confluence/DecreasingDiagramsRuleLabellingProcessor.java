@@ -85,7 +85,17 @@ public class DecreasingDiagramsRuleLabellingProcessor implements Processor {
         public Formula<Diophantine> buildConstraints() {
             var LDD2Constraints = buildLDD2Constraints();
             var cndConstraints = buildCNDConstraints();
-            return ff.buildAnd(LDD2Constraints, cndConstraints);
+            var rangeConstraints = buildWeightRangeConstraints();
+            return ff.buildAnd(LDD2Constraints, cndConstraints, rangeConstraints);
+        }
+
+        private Formula<Diophantine> buildWeightRangeConstraints() {
+            List<Formula<Diophantine>> constraints = new ArrayList<>(functionVarCache.size() + ruleVarCache.size());
+            for (var functionWeight : functionVarCache.values())
+                constraints.add(ff.buildTheoryAtom(Diophantine.create(functionWeight, SimplePolynomial.ZERO, ConstraintType.GE)));
+            for (var ruleWeight : ruleVarCache.values())
+                constraints.add(ff.buildTheoryAtom(Diophantine.create(ruleWeight, SimplePolynomial.ZERO, ConstraintType.GE)));
+            return ff.buildAnd(constraints);
         }
 
         private Formula<Diophantine> buildLDD2Constraints() {
