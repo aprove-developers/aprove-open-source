@@ -2117,12 +2117,12 @@ cpx_adp_defaults = First(
 critical_pair_analysis = LocalConfluenceProcessor
 conf_trs_preprocess    = RedundantRulesProcessor
 
-conf_trs_decreasing_diagram     = DecreasingDiagramsRuleLabellingProcessor[Order = POLO[Degree = 1, Engine = SMTLIB]]
-conf_trs_quasilinear_decreasing = QuasiLinearLinearizedDecreasingnessProcessor[Order = POLO[Degree = 1, Engine = SMTLIB]]
-conf_trs_interpretation_non_cr  = InterpretationNonConfluenceProcessor[Order = POLO[Engine = SMTLIB]]
+conf_trs_decreasing_diagram     = DecreasingDiagramsRuleLabellingProcessor[Order = POLO[Degree = 1, Engine = SMTLIB], WeakCRJoinLimit = 5]
+conf_trs_quasilinear_decreasing = QuasiLinearLinearizedDecreasingProcessor[Order = POLO[Degree = 1, Engine = SMTLIB], WeakCRJoinLimit = 5]
+conf_trs_interpretation_non_cr  = InterpretationNonConfluenceProcessor[Order = POLO[Engine = SMTLIB], Modulus = 3, MaxNumberOfCriticalPairs = 100, MaxNumberOfUnfoldedRules = 1000]
 
 newman_lemma_solve = Solve(
-            ConfNewmanProcessor : Any(qtrs, critical_pair_analysis)
+            ConfNewmanProcessor : Any(qtrs, Timer(10000, critical_pair_analysis))
         )
 
 conf_trs_quasilinear_decreasing_solve = Solve(
@@ -2134,11 +2134,16 @@ conf_trs_syntactic = First(
             StrongConfluenceProcessor
         )
 
+conf_trs_decreasing = First(
+            conf_trs_decreasing_diagram,
+            conf_trs_quasilinear_decreasing_solve
+        )
+
 conf_trs_disprove_cheap = LimitedNotWCRProcessor[WeakCRJoinLimit = 4]
 
 conf_trs_prove_atomic = First(
-            conf_trs_decreasing_diagram,
-            conf_trs_quasilinear_decreasing_solve,
+            conf_trs_preprocess : conf_trs_decreasing,
+            conf_trs_decreasing,
             newman_lemma_solve
         )
 
@@ -2169,7 +2174,6 @@ conf_trs_disprove_deep = First(conf_trs_interpretation_non_cr,
 conf_trs = First(
             conf_trs_syntactic,
             conf_trs_disprove_cheap,
-            conf_trs_preprocess : conf_trs_prove,
             conf_trs_prove,
             conf_trs_disprove_deep
         )

@@ -60,13 +60,10 @@ public class PolynomialInterpretationNonConfluenceProcessor implements Processor
                 .filter(cpInfo -> !cpInfo.isTrivial())
                 .map(cpInfo -> ground(cpInfo, fng))
                 .sorted(Comparator.comparingInt((CriticalPairInfo cpInfo) -> (cpInfo.s().getSize() + cpInfo.t().getSize())))
+                .limit(arguments.MaxNumberOfCriticalPairs)
                 .toList();
 
-        int limit = arguments.MaxNumberOfCriticalPairs;
         for (var candidate : candidates) {
-            if (limit <= 0)
-                break;
-
             var state = new PolynomialInterpretationNonConfluenceProcessorState(arguments, confTrsProblem, smtEngine, aborter);
 
             var interpretation = state.disproveByPolynomialInterpretation(candidate.s(), candidate.t());
@@ -76,8 +73,6 @@ public class PolynomialInterpretationNonConfluenceProcessor implements Processor
             var polynomialOrder = state.disproveByOrdering(candidate.s(), candidate.t());
             if (polynomialOrder != null)
                 return ResultFactory.disproved(new NotCRProof(candidate.divergence(), candidate.s(), candidate.t()));
-
-            limit--;
         }
 
         return ResultFactory.unsuccessful();
@@ -90,7 +85,7 @@ public class PolynomialInterpretationNonConfluenceProcessor implements Processor
 
     public static class Arguments {
         public SolverFactory Order;
-        public int MaxNumberOfCriticalPairs = 100;
+        public int MaxNumberOfCriticalPairs = 75;
         public int MaxNumberOfUnfoldedRules = 1000;
         public int Modulus = 3;
     }
