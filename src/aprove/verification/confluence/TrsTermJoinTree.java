@@ -82,29 +82,6 @@ public class TrsTermJoinTree {
         return new JoinableResult.Maybe();
     }
 
-    /**
-     * Checks whether the left term {@code s} can reach the right term {@code t}, i.e. whether
-     * {@code s ->* t}, by rewriting <em>only</em> {@code s}.
-     */
-    JoinableResult isRightTermReachable(int limit, Abortion aborter) {
-        if (s.equals(t))
-            return new JoinableResult.Joinable(buildRewriteSequence(sLastLayer.iterator().next()), buildRewriteSequence(tLastLayer.iterator().next()));
-
-        // Grow only the s-side. The t-side substitution map stays {t}, so buildTreeLayer reports a
-        // join exactly when a rewrite of s yields t, i.e. when s ->* t.
-        for (int i = 0; i < limit; i++) {
-            var sResult = buildTreeLayer(s, sLastLayer, sLazySubstitutions, tLazySubstitutions, sNormalForm, CriticalPairs.SearchMode.EXIT_ON_FIRST_JOIN, aborter);
-            if (!(sResult instanceof NewLayer(Set<BiTreeNode<RewriteStep>> sNewLayer)))
-                return sResult;
-            sLastLayer = sNewLayer;
-
-            if (sNewLayer.isEmpty())
-                return new JoinableResult.WcrCounterExample.NonJoinable(cpInfo);
-        }
-
-        return new JoinableResult.Maybe();
-    }
-
     record NewLayer(Set<BiTreeNode<RewriteStep>> newLayer) implements JoinableResult {}
 
     private JoinableResult buildTreeLayer(
