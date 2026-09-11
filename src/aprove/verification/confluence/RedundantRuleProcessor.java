@@ -13,7 +13,6 @@ import aprove.verification.dpframework.Result;
 import aprove.verification.dpframework.ResultFactory;
 import aprove.verification.oldframework.BasicStructures.FunctionSymbol;
 import aprove.verification.oldframework.Logic.YNMImplication;
-import aprove.verification.oldframework.Utility.FreshNameGenerator;
 import immutables.ImmutableCreator;
 
 import java.util.*;
@@ -47,7 +46,8 @@ public class RedundantRuleProcessor implements Processor {
     }
 
     public static class Arguments {
-        public int ReachabilityLimit = 6;
+        public int JSWeakCRJoinLimit = 6;
+        public int DelWeakCRJoinLimit = 6;
     }
 
     private static boolean canRuleBeSimulated(Map<FunctionSymbol, ? extends Set<Rule>> currentRuleMap, Rule rule) {
@@ -60,16 +60,13 @@ public class RedundantRuleProcessor implements Processor {
 
         // (js)
         var criticalPairs = confTRSProblem.getCriticalPairs();
-        criticalPairs.ensureStrongJoinabilityIsDetermined(aborter);
-        var stronglyJoinable = criticalPairs.getFoundJoinable();
-        for (var entry : stronglyJoinable.entrySet()) {
+        criticalPairs.checkStatusWeak(arguments.JSWeakCRJoinLimit, aborter);
+        var joinableCriticalPairs = criticalPairs.getFoundJoinable();
+        for (var entry : joinableCriticalPairs.entrySet()) {
             var cpInfo = entry.getKey();
             var rewriteSequences = entry.getValue();
-            if (!(cpInfo.s() instanceof TRSFunctionApplication) || !(cpInfo.t() instanceof TRSFunctionApplication))
-                continue;
             var r1 = Rule.create((TRSFunctionApplication) cpInfo.s(), rewriteSequences.x.getLast().substitutedTerm());
             var r2 = Rule.create((TRSFunctionApplication) cpInfo.t(), rewriteSequences.y.getLast().substitutedTerm());
-
             rules.add(r2);
             rules.add(r1);
         }
@@ -97,7 +94,7 @@ public class RedundantRuleProcessor implements Processor {
             var newRules = new LinkedHashSet<>(rules);
             newRules.remove(rule);
             var joinTree = new TrsTermJoinTree(new IncrementalRuleMap(newRules).getRuleMap(), rule.getLeft(), rule.getRight());
-            var result = joinTree.areTermsJoinable(0, arguments.ReachabilityLimit, CriticalPairs.SearchMode.EXIT_ON_FIRST_JOIN, aborter);
+            var result = joinTree.areTermsJoinable(0, arguments.DelWeakCRJoinLimit, CriticalPairs.SearchMode.EXIT_ON_FIRST_JOIN, aborter);
             return result instanceof JoinableResult.Joinable;
         });
 
