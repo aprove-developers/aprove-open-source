@@ -64,6 +64,8 @@ public class RedundantRuleProcessor implements Processor {
         var joinableCriticalPairs = criticalPairs.getFoundJoinable();
         for (var entry : joinableCriticalPairs.entrySet()) {
             var cpInfo = entry.getKey();
+            if (!(cpInfo.s() instanceof TRSFunctionApplication))
+                continue;
             var rewriteSequences = entry.getValue();
             var r1 = Rule.create((TRSFunctionApplication) cpInfo.s(), rewriteSequences.x.getLast().substitutedTerm());
             var r2 = Rule.create((TRSFunctionApplication) cpInfo.t(), rewriteSequences.y.getLast().substitutedTerm());
