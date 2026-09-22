@@ -129,6 +129,8 @@ public class PolynomialInterpretationNonConfluenceProcessor implements Processor
 
         for (var subtermWithPosition : rhs.getPositionsWithSubTerms()) {
             for (Rule other : allRules) {
+                if (!(other.getRight() instanceof TRSFunctionApplication))
+                    continue;
                 Rule otherFresh = other.renameVariables(other.getVariables());
                 TRSFunctionApplication otherLhs = otherFresh.getLeft();
                 TRSTerm otherRhs = otherFresh.getRight();
@@ -357,13 +359,12 @@ public class PolynomialInterpretationNonConfluenceProcessor implements Processor
         }
 
         private Set<Rule> computeUsableRules(Set<Rule> rules, TRSTerm term) {
-            if (!(term instanceof TRSFunctionApplication f))
+            if (!(term instanceof TRSFunctionApplication))
                 return Collections.emptySet();
 
-            var definedSymbols = ImmutableCreator.create(new IncrementalRuleMap(rules).getDefinedSymbols());
+            var rulesLhs = GeneralizedRule.computeLhsOfRulesAsMapInStandardRepresentation(new IncrementalRuleMap(rules).getRuleMap());
             Set<Rule> usableRules = new HashSet<>();
             Set<Rule> unusableRules = new HashSet<>(rules);
-            var fng = new FreshNameGenerator(f.getVariables(), FreshNameGenerator.VARIABLES);
 
             Deque<TRSTerm> worklist = new ArrayDeque<>();
             worklist.add(term);
@@ -378,7 +379,7 @@ public class PolynomialInterpretationNonConfluenceProcessor implements Processor
 
                 for (var sub : subterms) {
                     var cappedArgs = sub.getArguments().stream()
-                            .map(arg -> arg.tcap(definedSymbols, fng))
+                            .map(arg -> arg.tcap(rulesLhs))
                             .toList();
                     var capped = TRSTerm.createFunctionApplication(sub.getFunctionSymbol(), cappedArgs);
 
