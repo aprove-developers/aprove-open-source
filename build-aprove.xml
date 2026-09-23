@@ -90,7 +90,7 @@
 	<!-- compile -->
 	<target name="compile" depends="init,settings,generateGrammars,copyGrammars,copyResources">
 		<depend srcdir="${src}:${gen}" destdir="${build}" cache="${depend_cache}" />
-		<javac destdir="${build}" includes="${package}/**/*.java,immutables/**/*.java" excludes="${package}/Testing/**/*.java" debug="on" deprecation="off" memoryMaximumSize="784m" fork="true" encoding="ISO-8859-1" tempdir="/tmp" optimize="on" includeantruntime="true">
+		<javac destdir="${build}" includes="${package}/**/*.java,immutables/**/*.java" excludes="${package}/Testing/**/*.java" release="25" debug="on" deprecation="off" memoryMaximumSize="784m" fork="true" encoding="ISO-8859-1" tempdir="/tmp" optimize="on" includeantruntime="true">
 			<src path="${src}" />
 			<src path="${gen}" />
 			<modulepath>
