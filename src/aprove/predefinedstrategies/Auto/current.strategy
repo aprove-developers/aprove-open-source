@@ -2142,7 +2142,6 @@ conf_trs_decreasing = First(
 conf_trs_disprove_cheap = LimitedNotWCRProcessor[WeakCRJoinLimit = 4]
 
 conf_trs_prove_atomic = First(
-            conf_trs_preprocess : conf_trs_decreasing,
             conf_trs_decreasing,
             newman_lemma_solve
         )
@@ -2174,6 +2173,6 @@ conf_trs_disprove_deep = First(conf_trs_interpretation_non_cr,
 conf_trs = First(
             conf_trs_syntactic,
             conf_trs_disprove_cheap,
-            conf_trs_prove,
+            conf_trs_preprocess : conf_trs_prove,
             conf_trs_disprove_deep
         )
