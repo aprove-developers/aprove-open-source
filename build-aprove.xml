@@ -760,4 +760,21 @@
 			</classpath>
 		</java>
 	</target>
+
+
+
+	<target name="test-all-files">
+		<apply executable="java" failonerror="true">
+			<arg value="-ea" />
+			<arg value="-jar" />
+			<arg path="dist/lib/aprove.jar" />
+			<arg value="-m" />
+			<arg value="-wst" />
+			<arg value="-p" />
+			<arg value="plain"	/>
+
+			<fileset dir="examples/Haskell/full_haskell" includes="**/*.hs" />
+
+		</apply>
+	</target>
 </project>

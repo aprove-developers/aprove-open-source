@@ -1,5 +1,6 @@
 package aprove.cli;
 
+import aprove.input.Programs.haskell.StrictPositivityException;
 import gnu.getopt.*;
 
 import java.io.*;
@@ -22,6 +23,8 @@ import aprove.verification.oldframework.CPF.*;
 import aprove.verification.oldframework.Input.*;
 import aprove.verification.oldframework.Logic.*;
 import aprove.verification.oldframework.Utility.GenericStructures.*;
+
+import static aprove.verification.complexity.TruthValue.ComplexityYNM.MAYBE;
 
 public class Main {
 
