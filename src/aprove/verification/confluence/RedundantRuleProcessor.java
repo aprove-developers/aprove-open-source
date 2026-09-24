@@ -29,14 +29,7 @@ public class RedundantRuleProcessor implements Processor {
     @Override
     public Result process(BasicObligation obl, BasicObligationNode oblNode, Abortion aborter, RuntimeInformation rti) throws AbortionException {
         var confTRSProblem = (ConfTRSProblem) obl;
-
         var newConfTRSProblem = removeRedundantRules(confTRSProblem, aborter);
-
-        // If we couldn't transform the rule set give up early, such that future processors can prove and disprove confluence.
-        // The sound implication would disregard any proofs for non-confluence.
-        if (confTRSProblem.getRules().equals(newConfTRSProblem.getRules()))
-            return ResultFactory.unsuccessful();
-
         return ResultFactory.provedAnd(List.of(newConfTRSProblem), YNMImplication.SOUND, new RedundantRuleProof(newConfTRSProblem.getRules()));
     }
 
