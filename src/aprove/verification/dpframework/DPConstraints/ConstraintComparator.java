@@ -65,6 +65,9 @@ public class ConstraintComparator {
     }
 
     private int compareAA(TermAtom o1, TermAtom o2, Renaming map) {
+        if (o1.isPredicate() && !this.samePredicateAttributes((Predicate) o1, (Predicate) o2)) {
+            return 1;
+        }
         int h = this.compareTT(o1.getLeft(), o2.getLeft(), map);
         if (h == 0) {
             h = this.compareTT(o1.getRight(), o2.getRight(), map);
@@ -72,8 +75,20 @@ public class ConstraintComparator {
         return h;
     }
 
+    /**
+     * Compares the attributes that the polynomial encoding uses besides the
+     * terms: the kind of the relation, the rule (for its strictness) and the
+     * usable rule dependencies.
+     */
+    private boolean samePredicateAttributes(final Predicate p1, final Predicate p2) {
+        return p1.getKind() == p2.getKind()
+            && Objects.equals(p1.getOrigRule(), p2.getOrigRule())
+            && p1.getULeft() == p2.getULeft()
+            && p1.getURight() == p2.getURight();
+    }
+
     private int compareFF(TRSFunctionApplication o1, TRSFunctionApplication o2, Renaming map) {
-        int h = o1.getRootSymbol().hashCode() - o2.getRootSymbol().hashCode();
+        int h = o1.getRootSymbol().equals(o2.getRootSymbol()) ? 0 : 1;
         for (int i = 0; h == 0 && i < o1.getArguments().size(); i++) {
             h = this.compareTT(o1.getArgument(i), o2.getArgument(i), map);
         }
@@ -115,7 +130,7 @@ public class ConstraintComparator {
             case 4:
                 return this.compareSS((ConstraintSet) o1, (ConstraintSet) o2, map);
             default:
-                return o1.hashCode() - o2.hashCode();
+                return o1.equals(o2) ? 0 : 1;
             }
         }
         return h;
