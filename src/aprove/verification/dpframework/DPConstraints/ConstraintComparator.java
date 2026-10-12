@@ -4,7 +4,11 @@ import java.util.*;
 
 import aprove.verification.dpframework.BasicStructures.*;
 
-public class ConstraintComparator implements Comparator<Constraint> {
+/**
+ * Checks constraints for a bijective renaming of their variables, comparing
+ * constraint sets in iteration order. This does not define a total ordering.
+ */
+public class ConstraintComparator {
 
     // The private comparison methods return 0 for a match and nonzero otherwise.
 
@@ -117,9 +121,8 @@ public class ConstraintComparator implements Comparator<Constraint> {
         return h;
     }
 
-    @Override
-    public int compare(Constraint o1, Constraint o2) {
-        return this.compareCC(o1, o2, new Renaming());
+    public boolean isRenamingOf(Constraint o1, Constraint o2) {
+        return this.compareCC(o1, o2, new Renaming()) == 0;
     }
 
 }
