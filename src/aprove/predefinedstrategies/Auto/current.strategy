@@ -1905,7 +1905,7 @@ disprove_AST = Any(
                )
 
 prove_AST = Any(
-             PTRS_AST_DecidableRNT,
+             PTRS_AST_DecidableRNTDirect,
              First(
     	       Solve(PTRS_ToInnermost : RunDefaultStrategyForObligation),
                Solve(PTRS_toPQTRS : pqtrs_AST),
@@ -1921,7 +1921,7 @@ ptrs_psi_AST = ptrs_i_AST
 ptrs_i_AST = Any(
                Solve(PTRS_ToFull : disprove_AST),
                Any(
-	               PTRS_AST_DecidableRNT,
+	               PTRS_AST_DecidableRNTDirect,
 	               First(
 	                 Solve(PTRS_toPQTRS : pqtrs_AST),
 	                 PTRS_AST_DirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]],
@@ -1972,6 +1972,7 @@ adp_AST_defaults = First(
 				        ADP_AST_DependencyGraphProcessor,
 				        ADP_AST_UsableTermsProcessor,
 				        ADP_AST_UsableRulesProcessor,
+				        ADP_AST_DecidableRNTProcessor,
 				        ADP_AST_ProbabilityRemovalProcessor : qdp,
 	             		Timer(5000,
 	             			ADP_AST_SubtermCriterion[Engine=SAT4J]
@@ -2005,7 +2006,7 @@ probTransIncr = Repeat(1,*,
 # ============== (innermost) SAST of PTRS ==================== #
 # ============================================================ #
 
-ptrs_SAST = Any(disprove_SAST, prove_SAST)
+ptrs_SAST = Any(PTRS_SAST_DecidableRNTDirect, disprove_SAST, prove_SAST)
 
 disprove_SAST = Any(
                   Timer(10000,
@@ -2019,6 +2020,7 @@ disprove_SAST = Any(
 prove_SAST = PTRS_SAST_DirectPOLO[Allstrict = True, Order = POLO[Degree = -1, Range = 10, Engine = MINISAT]]
           
 ptrs_i_SAST = Any(
+			   PTRS_SAST_DecidableRNTDirect,
 			   Solve(PTRS_ToFull : disprove_SAST),
 			   First(
 			     Prove(
@@ -2049,6 +2051,7 @@ posqdt_SAST = Repeat(0,*,
 posqdt_SAST_defaults = First(
 				        ADP_SAST_UsableTermsProcessor,
 				        ADP_SAST_UsableRulesProcessor,
+				        ADP_SAST_DecidableRNTProcessor,
 				        ADP_SAST_ProbabilityRemovalProcessor : qdp,
 				        ADP_SAST_LeafRemovalProcessor,
 				        ADP_SAST_KnowledgePropagationProcessor
@@ -2058,6 +2061,7 @@ posqdt_SAST_defaults = First(
 # =========== (innermost) COMPLEXITY of PTRS ================= #
 # ============================================================ #
 cpx_ptrs = CombineParallel(
+               PTRS_Cpx_DecidableRNT,
                First(
                  Solve(PTRS_Cpx_ToInnermost : RunDefaultStrategyForObligation),
                  Solve(PTRS_Cpx_DerivationalToRuntimeProcessor : RunDefaultStrategyForObligation)
@@ -2070,24 +2074,28 @@ cpx_ptrs = CombineParallel(
              )
           
 cpx_ptrs_i = CombineParallel(
+               PTRS_Cpx_DecidableRNT,
                Solve(PTRS_Cpx_DerivationalToRuntimeProcessor : RunDefaultStrategyForObligation),
                Solve(ptrs_polo),
                Solve(ptrs_polo_exp)
              )
 
 cpx_ptrs_o = CombineParallel(
+               PTRS_Cpx_DecidableRNT,
                Solve(PTRS_Cpx_OutermostToInnermost : RunDefaultStrategyForObligation),
                Solve(ptrs_polo),
                Solve(ptrs_polo_exp)
              )
 
 cpx_ptrs_b = CombineParallel(
+               PTRS_Cpx_DecidableRNT,
                Solve(PTRS_Cpx_ToInnermost : RunDefaultStrategyForObligation),
                Solve(ptrs_polo),
                Solve(ptrs_polo_exp)
              )
           
 cpx_ptrs_i_b = CombineParallel(
+               PTRS_Cpx_DecidableRNT,
                Solve(PTRS_Cpx_ToPQTRS : cpx_pqtrs_i),
                Solve(ptrs_polo),
                Solve(ptrs_polo_exp)
@@ -2139,6 +2147,7 @@ cpx_adp_defaults = First(
                         ADP_Cpx_LeafRemovalProcessor,
 				        ADP_Cpx_UsableTermsProcessor,
 				        ADP_Cpx_UsableRulesProcessor,
+				        ADP_Cpx_DecidableRNTProcessor,
 				        ADP_Cpx_KnowledgePropagationProcessor,
 				        ADP_Cpx_ProbabilityRemovalProcessor : RunDefaultStrategyForObligation
 			          )

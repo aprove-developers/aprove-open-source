@@ -1799,7 +1799,7 @@ declare PTRS_AST_ExpectedDirectPOLO = aprove.verification.probabilistic.Terminat
 declare PTRS_AST_DirectMATRO = aprove.verification.probabilistic.Termination.PTRSProblem.AST.Processors.PTRS_AST_DirectMatroProcessor
 declare PTRS_AST_LoopFinder = aprove.verification.probabilistic.Termination.PTRSProblem.AST.Processors.PTRS_AST_LoopFinderProcessor
 declare PTRS_AST_LoopWalkFinder = aprove.verification.probabilistic.Termination.PTRSProblem.AST.Processors.PTRS_AST_LoopWalkFinderProcessor
-declare PTRS_AST_DecidableRNT = aprove.verification.probabilistic.Termination.PTRSProblem.AST.Processors.PTRS_AST_DecidableRNTProcessor
+declare PTRS_AST_DecidableRNTDirect = aprove.verification.probabilistic.Termination.PTRSProblem.AST.Processors.PTRS_AST_DecidableRNTDirectProcessor
 declare PTRS_AST_OutermostToInnermost = aprove.verification.probabilistic.Termination.PTRSProblem.AST.Processors.PTRS_AST_OutermostToInnermostProcessor
 
 declare PQTRS_AST_toADP = aprove.verification.probabilistic.Termination.PTRSProblem.AST.Processors.PQTRS_AST_ToADPProblemProcessor
@@ -1807,6 +1807,7 @@ declare PQTRS_AST_toADP = aprove.verification.probabilistic.Termination.PTRSProb
 
 # PTRS Processors (SAST)
 declare PTRS_SAST_DirectPOLO = aprove.verification.probabilistic.Termination.PTRSProblem.SAST.Processors.PTRS_SAST_DirectPoloProcessor
+declare PTRS_SAST_DecidableRNTDirect = aprove.verification.probabilistic.Termination.PTRSProblem.SAST.Processors.PTRS_SAST_DecidableRNTDirectProcessor
 declare PTRS_SAST_LoopFinder = aprove.verification.probabilistic.Termination.PTRSProblem.SAST.Processors.PTRS_SAST_LoopFinderProcessor
 
 declare PQTRS_SAST_toADP = aprove.verification.probabilistic.Termination.PTRSProblem.SAST.Processors.PQTRS_SAST_ToADPProblemProcessor
@@ -1816,6 +1817,7 @@ declare PQTRS_SAST_toADP = aprove.verification.probabilistic.Termination.PTRSPro
 declare ADP_AST_ReductionPairProcessor = aprove.verification.probabilistic.Termination.ADPProblem.AST.Processors.ADP_AST_ReductionPairProcessor
 declare ADP_AST_DependencyGraphProcessor = aprove.verification.probabilistic.Termination.ADPProblem.AST.Processors.ADP_AST_DependencyGraphProcessor
 declare ADP_AST_UsableRulesProcessor = aprove.verification.probabilistic.Termination.ADPProblem.AST.Processors.ADP_AST_UsableRulesProcessor
+declare ADP_AST_DecidableRNTProcessor = aprove.verification.probabilistic.Termination.ADPProblem.AST.Processors.ADP_AST_DecidableRNTProcessor
 declare ADP_AST_UsableTermsProcessor = aprove.verification.probabilistic.Termination.ADPProblem.AST.Processors.ADP_AST_UsableTermsProcessor
 declare ADP_AST_ProbabilityRemovalProcessor = aprove.verification.probabilistic.Termination.ADPProblem.AST.Processors.ADP_AST_ProbabilityRemovalProcessor
 declare ADP_AST_SubtermCriterion = aprove.verification.probabilistic.Termination.ADPProblem.AST.Processors.ADP_AST_SubtermCriterion
@@ -1831,6 +1833,7 @@ declare ADP_SAST_ReductionPairProcessor = aprove.verification.probabilistic.Term
 declare ADP_SAST_KnowledgePropagationProcessor = aprove.verification.probabilistic.Termination.ADPProblem.SAST.Processors.ADP_SAST_KnowledgePropagationProcessor
 declare ADP_SAST_LeafRemovalProcessor = aprove.verification.probabilistic.Termination.ADPProblem.SAST.Processors.ADP_SAST_LeafRemovalProcessor
 declare ADP_SAST_UsableRulesProcessor = aprove.verification.probabilistic.Termination.ADPProblem.SAST.Processors.ADP_SAST_UsableRulesProcessor
+declare ADP_SAST_DecidableRNTProcessor = aprove.verification.probabilistic.Termination.ADPProblem.SAST.Processors.ADP_SAST_DecidableRNTProcessor
 declare ADP_SAST_UsableTermsProcessor = aprove.verification.probabilistic.Termination.ADPProblem.SAST.Processors.ADP_SAST_UsableTermsProcessor
 declare ADP_SAST_ProbabilityRemovalProcessor = aprove.verification.probabilistic.Termination.ADPProblem.SAST.Processors.ADP_SAST_ProbabilityRemovalProcessor
 
@@ -1838,6 +1841,7 @@ declare ADP_SAST_ProbabilityRemovalProcessor = aprove.verification.probabilistic
 #Complexity PTRS Processors
 declare PTRS_Cpx_LoopFinder = aprove.verification.probabilistic.Complexity.PTRSProblem.Processors.PTRS_Cpx_LoopFinderProcessor
 declare PTRS_Cpx_DirectPOLO = aprove.verification.probabilistic.Complexity.PTRSProblem.Processors.PTRS_Cpx_DirectPoloProcessor
+declare PTRS_Cpx_DecidableRNT = aprove.verification.probabilistic.Complexity.PTRSProblem.Processors.PTRS_Cpx_DecidableRNTProcessor
 declare PTRS_Cpx_ToPQTRS = aprove.verification.probabilistic.Complexity.PTRSProblem.Processors.PTRS_Cpx_ToPQTRSProcessor
 declare PTRS_Cpx_ToInnermost = aprove.verification.probabilistic.Complexity.PTRSProblem.Processors.PTRS_Cpx_ToInnermostProcessor
 declare PTRS_Cpx_DerivationalToRuntimeProcessor = aprove.verification.probabilistic.Complexity.PTRSProblem.Processors.PTRS_Cpx_DerivationalToRuntimeProcessor
@@ -1851,6 +1855,7 @@ declare ADP_Cpx_ReductionPairProcessor = aprove.verification.probabilistic.Compl
 declare ADP_Cpx_KnowledgePropagationProcessor = aprove.verification.probabilistic.Complexity.ADPProblem.Processors.ADP_Cpx_KnowledgePropagationProcessor
 declare ADP_Cpx_LeafRemovalProcessor = aprove.verification.probabilistic.Complexity.ADPProblem.Processors.ADP_Cpx_LeafRemovalProcessor
 declare ADP_Cpx_UsableRulesProcessor = aprove.verification.probabilistic.Complexity.ADPProblem.Processors.ADP_Cpx_UsableRulesProcessor
+declare ADP_Cpx_DecidableRNTProcessor = aprove.verification.probabilistic.Complexity.ADPProblem.Processors.ADP_Cpx_DecidableRNTProcessor
 declare ADP_Cpx_UsableTermsProcessor = aprove.verification.probabilistic.Complexity.ADPProblem.Processors.ADP_Cpx_UsableTermsProcessor
 declare ADP_Cpx_ProbabilityRemovalProcessor = aprove.verification.probabilistic.Complexity.ADPProblem.Processors.ADP_Cpx_ProbabilityRemovalProcessor
 declare ADP_Cpx_RuleOverlapInstProcessor = aprove.verification.probabilistic.Complexity.ADPProblem.Processors.ADP_Cpx_RuleOverlapInstProcessor

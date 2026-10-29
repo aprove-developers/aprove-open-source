@@ -317,61 +317,38 @@ public class PTRSProblem extends DefaultBasicObligation implements Immutable {
         return true;
     }
 
+    /**
+     * A PTRS is tail recursive if no right-hand side contains nested defined symbols,
+     * i.e., there are no positions pi < tau in a right-hand side that both carry a defined symbol.
+     */
     public boolean isTailRecursive() {
+        final Set<FunctionSymbol> defs = getDefSymbolsOfR();
         for (final ProbabilisticRule rule : getPR()) {
             for (final TRSTerm r : rule.getRight().getSupport()) {
-                final Set<TRSTerm> remainingSubTerms = new LinkedHashSet<>();
-                remainingSubTerms.add(r);
-
-                final Iterator<TRSTerm> iterator = remainingSubTerms.iterator();
-                while (iterator.hasNext()) {
-                    final TRSTerm t = iterator.next();
-                    iterator.remove();
+                final Deque<TRSTerm> todo = new ArrayDeque<>();
+                todo.add(r);
+                while (!todo.isEmpty()) {
+                    final TRSTerm t = todo.poll();
                     if (t instanceof TRSVariable) {
                         continue;
                     }
                     final TRSFunctionApplication currentTerm = (TRSFunctionApplication) t;
-                    final FunctionSymbol currentRoot = currentTerm.getFunctionSymbol();
-
-                    if (getDefSymbolsOfR().contains(currentRoot)) {
-                        final Set<FunctionSymbol> functionSymbolsBelowDefinedSymbol = currentTerm.getFunctionSymbols();
-                        functionSymbolsBelowDefinedSymbol.remove(currentTerm.getFunctionSymbol());
-
-                        for (final FunctionSymbol s : functionSymbolsBelowDefinedSymbol) {
-                            if (getDefSymbolsOfR().contains(s)) {
-                                return false;
+                    if (defs.contains(currentTerm.getFunctionSymbol())) {
+                        // no defined symbol may occur below a defined symbol
+                        for (final TRSTerm arg : currentTerm.getArguments()) {
+                            for (final FunctionSymbol s : arg.getFunctionSymbols()) {
+                                if (defs.contains(s)) {
+                                    return false;
+                                }
                             }
                         }
                     } else {
-                        remainingSubTerms.addAll(currentTerm.getArguments());
+                        todo.addAll(currentTerm.getArguments());
                     }
                 }
             }
         }
         return true;
-    }
-
-    /*
-     * Only works when the PTRS is tail recursive!
-     */
-    public boolean isWeaklyNormalizing(final Set<ProbabilisticRule> remainingRules) throws Exception {
-        if (!isTailRecursive()) {
-            throw new Exception("only defined on tail-recursive PTRS");
-        }
-        boolean newRuleFound = false;
-        do {
-            newRuleFound = false;
-            outer: for (final ProbabilisticRule rule : remainingRules) {
-                for (final TRSTerm r : rule.getRight().getSupport()) {
-                    if (r.isNormal(remainingRules)) {
-                        newRuleFound = true;
-                        remainingRules.remove(rule);
-                        break outer;
-                    }
-                }
-            }
-        } while (newRuleFound);
-        return remainingRules.isEmpty();
     }
 
     //TODO Fix this.

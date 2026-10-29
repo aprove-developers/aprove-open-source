@@ -266,7 +266,7 @@ public class ADP_SAST_Problem extends DefaultBasicObligation implements
     }
 
     /**
-     * @return set of ProbabilistcRule, for rules which have all predecessors in K_ADPs
+     * @return set of ProbabilisticRule, for rules which have all predecessors in K_ADPs
      */
     public Set<ProbabilisticRule> getRulesWithAllPredinK() {
         final Set<ProbabilisticRule> rulesWithAllPredinK = new HashSet<>();
