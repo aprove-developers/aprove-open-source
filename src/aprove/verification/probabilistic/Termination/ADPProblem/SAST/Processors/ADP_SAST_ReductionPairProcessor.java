@@ -119,6 +119,11 @@ public class ADP_SAST_ReductionPairProcessor extends ADP_SAST_ProblemProcessor {
             }
         }
 
+        // No dependency tuple could be oriented strictly: the processor made no progress.
+        if (removedDepTuples.isEmpty()) {
+            return ResultFactory.unsuccessful("Reduction pair oriented no dependency tuple strictly; no progress");
+        }
+
         final PQTRSProblem newpqtrs =
             PQTRSProblem.create(oldRules, oriqSast_ADP.getQ(), oriqSast_ADP.getStrat(), ProbabilisticTerminationResult.SAST, oriqSast_ADP.isBasic());
         final ADP_SAST_Problem newpqdp = ADP_SAST_Problem.create(oriqSast_ADP
@@ -363,15 +368,24 @@ public class ADP_SAST_ReductionPairProcessor extends ADP_SAST_ProblemProcessor {
      * @return true, if the rule together with the polynomial interpretation stored in order satisfies the 3. "strictly decreasing" formula
      */
     private boolean checkStrictDecrease(final ProbabilisticRule rule, final ADP_SAST_Problem sast_ADPProblem, final POLO order, final Abortion aborter) {
-        VarPolynomial lhsTuplePoly = (order.getInterpretation().interpretTerm(rule.getLeft(), aborter));
         VarPolynomial rhsExpectedPoly = VarPolynomial.ZERO;
-        Integer total_amount = 0;
 
-        // l -> {p1 : r1, ..., pk : rk} add up for each ri the annotated subterms (term = ri)
+        // Compute a multiplier such that we are dealing with natural coefficients (LCM of the denominators),
+        // and weight each outcome by its probability -- exactly as createDepTupleStrictFormulaExpectation does,
+        // so that this re-check accepts precisely the strict decreases the solver was asked to satisfy.
+        BigInteger multiplier = BigInteger.ONE;
+        for (final Entry<Pair<TRSTerm, BigFraction>, Integer> entry : rule.getRight().getProbabilityMapping().entrySet()) {
+            final BigFraction prob = entry.getKey().getValue();
+            multiplier = multiplier.multiply(prob.getDenominator());
+        }
+
+        // l -> {p1 : r1, ..., pk : rk}: rhs expected value = sum_i amount_i * p_i * (annotated subterms of r_i)
         for (final Entry<Pair<TRSTerm, BigFraction>, Integer> entry : rule.getRight().getProbabilityMapping().entrySet()) {
             final TRSTerm term = entry.getKey().getKey();
+            final BigFraction prob = entry.getKey().getValue();
             final Integer amount = entry.getValue();
-            total_amount += amount;
+
+            final BigInteger multipliesProb = prob.multiply(multiplier).reduce().getNumerator();
 
             // Adding all annotated subterms interpretations to setPoly
             VarPolynomial setPoly = VarPolynomial.ZERO;
@@ -379,12 +393,14 @@ public class ADP_SAST_ReductionPairProcessor extends ADP_SAST_ProblemProcessor {
                 setPoly = setPoly.plus(order.getInterpretation().interpretTerm(annoSubterm.x, aborter));
             }
 
-            // Adding setpoly, multiplied by the amount, to the rhs expected value
-            rhsExpectedPoly = rhsExpectedPoly.plus(setPoly.times(SimplePolynomial.create(amount)));
+            for (int i = 0; i < amount; i++) {
+                rhsExpectedPoly = rhsExpectedPoly.plus(setPoly.times(SimplePolynomial.create(multipliesProb)));
+            }
         }
 
-        // We need to multiply the lhs by the total amount we have on the rhs side to compare with the expected value
-        lhsTuplePoly = lhsTuplePoly.times(SimplePolynomial.create(total_amount));
+        // Multiply the lhs by the same multiplier to compare with the probability-weighted expected value.
+        final VarPolynomial lhsTuplePoly =
+            order.getInterpretation().interpretTerm(rule.getLeft(), aborter).times(SimplePolynomial.create(multiplier));
 
         // Make sure that that the expected Tuple part is strictly smaller
         final VarPolynomial tupleConstraintPoly = lhsTuplePoly.minus(rhsExpectedPoly);

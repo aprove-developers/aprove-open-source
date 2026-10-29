@@ -161,7 +161,6 @@ public abstract class PooledJob implements Runnable {
         }
     }
 
-    @SuppressWarnings("deprecation") // for Thread.stop()
     public void kill() {
         synchronized(this) {
             switch(this.execState) {
@@ -171,12 +170,8 @@ public abstract class PooledJob implements Runnable {
             case RUNNING:
                 this.execState = ExecutionState.KILLED;
                 TrackThread.logThreadStop(this.runnerThread, this.longName());
-                try {
-                    this.runnerThread.stop();
-                } catch (UnsupportedOperationException e) {
-                    // Thread.stop() was removed in Java 21+; fall back to interrupt
-                    this.runnerThread.interrupt();
-                }
+                // Thread.stop() always throws since JDK 20 and is gone in JDK 26
+                this.runnerThread.interrupt();
                 break;
             case DONE:
                 // nothing to do

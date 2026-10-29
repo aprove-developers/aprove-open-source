@@ -82,6 +82,7 @@ public enum Citation {
     IJCAR24, // TODO
     FLOPS24JOURNAL,// TODO
     EY09,
+    EGK13,
     // Confluence
     KB70,
     HUE80,

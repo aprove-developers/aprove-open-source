@@ -261,6 +261,17 @@ public class PTRS_Cpx_Problem extends DefaultBasicObligation implements Immutabl
         return true;
     }
 
+    public boolean isNonErasing() {
+        for (final ProbabilisticRule rule : getPR()) {
+            for (final Rule r : rule.getNonProbabilisticRepresentation()) {
+                if (!r.isNonErasing()) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     //TODO Fix this.
     /**
      * CURRENTLY ONLY BE USABLE TO CHECK IF CriticalPairs ARE EMPTY!
