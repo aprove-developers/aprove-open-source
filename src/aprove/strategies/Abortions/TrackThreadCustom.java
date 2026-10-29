@@ -17,17 +17,12 @@ class TrackThreadCustom extends TrackThread {
     }
 
     @Override
-    @SuppressWarnings("deprecation")
     public void kill() {
         if (this.thread.getState() == Thread.State.TERMINATED) {
             return;
         }
         TrackThread.logThreadStop(this.thread, this.thread.getName());
-        try {
-            this.thread.stop();
-        } catch (UnsupportedOperationException e) {
-            this.thread.interrupt();
-        }
+        this.thread.interrupt();
     }
 
 }

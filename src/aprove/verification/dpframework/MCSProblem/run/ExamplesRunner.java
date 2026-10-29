@@ -92,11 +92,7 @@ public class ExamplesRunner {
                         //System.out.println("TIMEOUTTTTTT");
 //                        System.out.println(fileName+"\t"+exampleId+"\tTIMEOUT\tUNKNOWN\tUNKNOWN\t"+runnerThread.getBiggestMCGSize());
                         progTimeouts++;
-                        try {
-                            runnerThread.stop();
-                        } catch (UnsupportedOperationException e) {
-                            runnerThread.interrupt();
-                        }
+                        runnerThread.interrupt();
                         progTotalTime+=(Math.min(ExamplesRunner.SCC_TIMEOUT,timeLeft));
                         timeLeft-=(Math.min(ExamplesRunner.SCC_TIMEOUT,timeLeft));
                         continue;
