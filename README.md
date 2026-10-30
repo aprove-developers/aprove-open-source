@@ -16,7 +16,7 @@
   <a href="http://www.youtube.com/watch?v=-OrJi9DeKOg">Intro Video</a>
 </p>
 
-<p align="center"><em>Current release: 1.2.0 Capybara</em></p>
+<p align="center"><em>Current release: 1.3.0 Capybara</em></p>
 
 ---
 
