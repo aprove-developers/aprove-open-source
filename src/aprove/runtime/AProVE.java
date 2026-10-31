@@ -4,10 +4,13 @@ import java.util.*;
 import java.util.logging.*;
 
 import aprove.*;
+import aprove.input.Programs.haskell.PositivityChecker;
+import aprove.input.Programs.haskell.HaskellParserCheck;
 import aprove.input.Utility.*;
 import aprove.prooftree.Obligations.*;
 import aprove.strategies.ExecutableStrategies.*;
 import aprove.strategies.Parameters.*;
+import aprove.verification.dpframework.HaskellProblem.HaskellProgram;
 import aprove.verification.dpframework.JBCProblem.*;
 import aprove.verification.oldframework.Input.*;
 import aprove.verification.oldframework.Input.Annotators.*;
@@ -57,13 +60,23 @@ public class AProVE implements ProveRunner {
     public AProVE(final Input input) throws SourceException {
         this.input = input;
         Globals.programFile = input.getPath();
-        this.parse(null);
+        try {
+            this.parse(null);
+        } catch (final HaskellParserCheck e) {
+            System.exit(0);
+        }
+//        this.parse(null);
         this.metadata = this.buildMetadata();
     }
 
     public AProVE(final Input input, final HandlingMode handlingMode) throws SourceException {
         this.input = input;
-        this.parse(handlingMode);
+        try {
+            this.parse(handlingMode);
+        } catch (final HaskellParserCheck e) {
+            System.exit(0);
+        }
+//        this.parse(handlingMode);
         this.metadata = this.buildMetadata();
     }
 
@@ -102,7 +115,7 @@ public class AProVE implements ProveRunner {
     public ObligationNode getRoot() {
         return this.root;
     }
-    
+
     public TypedInput getTypedInput() {
         return this.typedInput;
     }
@@ -179,6 +192,21 @@ public class AProVE implements ProveRunner {
         Main.firstObligation = false;
         this.root = rootAndPositions.x;
         this.positions = rootAndPositions.y;
+        if (this.getTypedInput().getLanguage().equals(Language.HASKELL)) {
+            final PositivityChecker checker = new PositivityChecker();
+            checker.checkForIOResult(((HaskellProgram) this.typedInput.getInput()).getModules());
+        }
+        throw new HaskellParserCheck("Passed");
+//        if (forcedHandling != null) {
+//            this.forceHandlingMode(forcedHandling);
+//        }
+//        final PublicAnnotator annotator = new DefaultAnnotator();
+//        final AnnotatedInput annotate = annotator.annotate(this.typedInput);
+//        final ObligationFactory of = new MetaObligationFactory();
+//        final Pair<ObligationNode, List<BasicObligationNode>> rootAndPositions = of.getRootAndPositions(annotate);
+//        Main.firstObligation = false;
+//        this.root = rootAndPositions.x;
+//        this.positions = rootAndPositions.y;
     }
 
 }
