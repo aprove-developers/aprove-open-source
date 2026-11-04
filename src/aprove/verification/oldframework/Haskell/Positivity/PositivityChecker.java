@@ -21,12 +21,10 @@ public final class PositivityChecker {
     }
 
     /**
-     * Checks all data and newtype declarations of the given modules. The types of the Prelude are taken
-     * into account for determining how they use their arguments, but they are not checked themselves.
+     * Checks all data and newtype declarations of the given modules and the Prelude.
      *
      * @param modules the modules of the program, already processed by {@link Modules#buildHaskellProgram()}
-     * @throws StrictPositivityException if some data type declared outside of the Prelude is not strictly
-     *         positive
+     * @throws StrictPositivityException if some data type is not strictly positive
      */
     public static void check(final Modules modules) {
         final Set<Module> allModules = new LinkedHashSet<>(modules.getModMap().values());
@@ -44,13 +42,10 @@ public final class PositivityChecker {
 
         final List<Violation> violations = new ArrayList<>();
         for (final TyConsEntity type : types) {
-            // FIXME: IOResult in Prelude has a negative self-cycle and MIXED polarity, so we skip this for now (though unsound)
-            if (!type.getModule().isPrelude()) {
-                final Node node = new Node(type);
-                final Occurrence selfOccurrence = graph.transitiveOccurrence(node, node);
-                if (selfOccurrence.isNotStrictlyPositive()) {
-                    violations.add(new Violation(type, selfOccurrence));
-                }
+            final Node node = new Node(type);
+            final Occurrence selfOccurrence = graph.transitiveOccurrence(node, node);
+            if (selfOccurrence.isNotStrictlyPositive()) {
+                violations.add(new Violation(type, selfOccurrence));
             }
         }
 
