@@ -48,7 +48,9 @@ public class SimplePolyConstraint implements Immutable, Comparable<SimplePolyCon
     // the SimplePolynomial on the LHS of the constraint
     private final SimplePolynomial simplePoly;
 
-    // the type of the Constraint
+    // the type of the Constraint; only ConstraintType.GE and ConstraintType.EQ
+    // are possible/allowed values after object construction (ConstraintType.GT
+    // should be transformed away by the constructor)
     private final ConstraintType type;
 
     private int hashValue; // cache for the hash value
@@ -386,13 +388,9 @@ public class SimplePolyConstraint implements Immutable, Comparable<SimplePolyCon
             BigInteger value = this.simplePoly.getNumericalAddend();
             switch (this.type) {
             case EQ :
-                if (value.signum() == 0) {
-                    return true;
-                }
+                return value.signum() == 0;
             case GE :
-                if (value.signum() >= 0) {
-                    return true;
-                }
+                return value.signum() >= 0;
             }
         }
         return false;
