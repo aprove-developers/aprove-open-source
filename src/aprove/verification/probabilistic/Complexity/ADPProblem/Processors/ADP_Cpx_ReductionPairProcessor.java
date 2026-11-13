@@ -444,7 +444,7 @@ public class ADP_Cpx_ReductionPairProcessor extends ADP_Cpx_ProblemProcessor {
         for (final Entry<Pair<TRSTerm, BigFraction>, Integer> entry : rule.getRight().getProbabilityMapping().entrySet()) {
             final TRSTerm term = entry.getKey().getKey();
             final BigFraction prob = entry.getKey().getValue();
-            entry.getValue();
+            final Integer amount = entry.getValue();
             // Adding all annotated subterms interpretations to setPoly
             VarPolynomial setPoly = VarPolynomial.ZERO;
             for (final Pair<TRSFunctionApplication, Position> annoSubterm : term.getAnnoSubtermsWithPositions(CpxADPProblem.getDeAnnoMap())) {
@@ -454,7 +454,9 @@ public class ADP_Cpx_ReductionPairProcessor extends ADP_Cpx_ProblemProcessor {
             final BigInteger multipliesProb = prob.multiply(multiplier).reduce().getNumerator();
 
             // Adding setpoly, multiplied by the amount, to the rhs expected value
-            rhsExpectedPoly = rhsExpectedPoly.plus(setPoly.times(SimplePolynomial.create(multipliesProb)));
+            for (int i = 0; i < amount; i++) {
+                rhsExpectedPoly = rhsExpectedPoly.plus(setPoly.times(SimplePolynomial.create(multipliesProb)));
+            }
         }
 
         // We need to multiply the lhs by the total amount we have on the rhs side to compare with the expected value
@@ -497,7 +499,7 @@ public class ADP_Cpx_ReductionPairProcessor extends ADP_Cpx_ProblemProcessor {
             StringBuilder result;
             result = new StringBuilder();
             result.append(o.paragraph());
-            result.append("We use the reduction pair processor.");// Add Citation
+            result.append("We use the reduction pair processor " + o.cite(Citation.KASSING_DISS) + ".");
             result.append(o.linebreak());
             result.append("The following pairs can be oriented strictly and are moved from S:");
             result.append(o.cond_linebreak());

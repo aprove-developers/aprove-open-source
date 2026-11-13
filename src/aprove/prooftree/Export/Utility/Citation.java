@@ -75,6 +75,8 @@ public enum Citation {
     STERNAGEL_THIEMANN_RTA14,
     ADY19, 
     KASSING_MA,
+    KASSING_DISS,
+    JPK60,
     CADE23,
     FoSSaCS24,
     FLOPS24,

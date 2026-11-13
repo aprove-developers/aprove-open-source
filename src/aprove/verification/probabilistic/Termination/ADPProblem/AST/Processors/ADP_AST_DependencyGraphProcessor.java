@@ -48,7 +48,7 @@ public class ADP_AST_DependencyGraphProcessor extends ADP_AST_ProblemProcessor {
             // certification modes).
             return ResultFactory.proved(origpqdp,
                 YNMImplication.EQUIVALENT,
-                new AST_ADPDependencyGraphProof(graph, 0, 0, origpqdp.isInnermost()));
+                new AST_ADPDependencyGraphProof(graph, 0, 0, origpqdp.isInnermost(), origpqdp.isBasic()));
         }
 
         graph.getGraph();
@@ -95,7 +95,7 @@ public class ADP_AST_DependencyGraphProcessor extends ADP_AST_ProblemProcessor {
         final int nrSccs = newProblems.size();
 
         final AST_ADPDependencyGraphProof DGPproof =
-            new AST_ADPDependencyGraphProof(graph, nrSccs, lessNodes, origpqdp.isInnermost());
+            new AST_ADPDependencyGraphProof(graph, nrSccs, lessNodes, origpqdp.isInnermost(), origpqdp.isBasic());
 
         final Result result = ResultFactory.provedAnd(newProblems, YNMImplication.EQUIVALENT, DGPproof);
         return result;
@@ -112,15 +112,18 @@ public class ADP_AST_DependencyGraphProcessor extends ADP_AST_ProblemProcessor {
         private final int nrSccs;
         private final int lessNodes;
         private final boolean innermost;
+        private final boolean basic;
 
         private AST_ADPDependencyGraphProof(final ProbQDependencyGraph graph,
             final int nrSccs,
             final int lessNodes,
-            final boolean innermost) {
+            final boolean innermost,
+            final boolean basic) {
             this.graph = graph;
             this.nrSccs = nrSccs;
             this.lessNodes = lessNodes;
             this.innermost = innermost;
+            this.basic = basic;
         }
 
         private static final Citation[] citations = new Citation[] { Citation.LPAR04,
@@ -131,10 +134,10 @@ public class ADP_AST_DependencyGraphProcessor extends ADP_AST_ProblemProcessor {
         public String export(final Export_Util o, final VerbosityLevel level) {
             final StringBuilder res = new StringBuilder();
             res.append(o.paragraph());
-            if (this.innermost) {
-                res.append("We use the dependency graph processor ").append(o.cite(Citation.FLOPS24)).append(".");
-            } else { //full AST
-                res.append("We use the dependency graph processor ").append(" (!PROTOTYPE!) ").append(".");
+            if (!this.basic) { //innermost and full AST
+                res.append("We use the dependency graph processor ").append(o.cite(Citation.KASSING_DISS)).append(".");
+            } else { //basic AST
+                res.append("We use the dependency graph processor ").append(o.cite(Citation.JPK60)).append(".");
             }
             res.append(o.linebreak());
             res.append("The approximation of the Dependency Graph ")

@@ -67,6 +67,10 @@ public class PTRS_SAST_LoopFinderProcessor extends PTRS_SAST_ProblemProcessor {
         //List for all already found trees
         final List<NonTerminationProbProofNode> trees = new ArrayList<>();
 
+        //Cache for the linear pattern term check (keyed by base term and pumping substitution),
+        //a new one for each call of the processor, since processor objects are shared between threads
+        final Map<Pair<TRSTerm, TRSSubstitution>, Boolean> linearPatternCache = new HashMap<>();
+
         //Transform problem to QDPProblem
         final QTRSProblem qtrs = ptrs.getNonProbAbstraction();
         final ImmutableTriple<ImmutableSet<Rule>, ImmutableMap<FunctionSymbol, FunctionSymbol>, ImmutableMap<Rule, List<Pair<Position, Rule>>>> dps =
@@ -113,6 +117,15 @@ public class PTRS_SAST_LoopFinderProcessor extends PTRS_SAST_ProblemProcessor {
 
                 // The terms in our trees are always in standard representation
                 loopTerm = loopTerm.getStandardRenumbered();
+
+                // with basic start terms, the loop term is the start term of the disproof, so it has to be basic
+                // (for full rewriting, it suffices that a basic term reaches an instance of it in one step)
+                if (ptrs.isBasic()
+                    && !(ptrs.getRewriteStrategy() == RewriteStrategy.FULL
+                        ? ProbabilisticRule.isReachedFromBasicTerm(loopTerm, ptrs.getPR())
+                        : ProbabilisticRule.isBasicTerm(loopTerm, ptrs.getPR()))) {
+                    continue;
+                }
 
                 NonTerminationProbProofNode tree = null;
                 //Gucken ob loopTerm schon ausgewertet wurde
@@ -270,7 +283,7 @@ public class PTRS_SAST_LoopFinderProcessor extends PTRS_SAST_ProblemProcessor {
                     //Berechne die Rewritings
                     for (final Pair<NonTerminationProbProofNode, Position> leaf : currentLeaves) {
                         final List<Pair<NonTerminationProbProofNode, Position>> newChildsForSingleLeaf =
-                            computeChildrenForStepIfPossible(ptrs.getPR(), loopTerm, leaf, rewriteSeq.get(i), dps, ptrs);
+                            computeChildrenForStepIfPossible(ptrs.getPR(), loopTerm, leaf, rewriteSeq.get(i), dps, ptrs, linearPatternCache);
                         newLeaves.addAll(newChildsForSingleLeaf);
                     }
                     currentLeaves = newLeaves;
@@ -301,8 +314,11 @@ public class PTRS_SAST_LoopFinderProcessor extends PTRS_SAST_ProblemProcessor {
                 tree.collectLeaves(curLeaves);
 
                 for (final NonTerminationProbProofNode leaf : curLeaves) {
-                    //If there is a leaf with probability 1, then we have a loop walk.
-                    if (leaf.getValue().y.equals(BigFraction.ONE)) {
+                    //If there is a leaf with probability 1 (that is not the root and contains an instance of the
+                    //loop term), then we have a loop walk.
+                    if (leaf != tree
+                        && leaf.getValue().y.equals(BigFraction.ONE)
+                        && NonTerminationProbProofNode.containsInstanceOf(leaf.getValue().getX(), tree.getValue().getX())) {
                         return ResultFactory.disproved(new SASTLoopFinderProof(tree, rewriteSeq, tree.isMaxValueAllCounts()));
                     }
                 }
@@ -326,12 +342,12 @@ public class PTRS_SAST_LoopFinderProcessor extends PTRS_SAST_ProblemProcessor {
                     //Compute the possible rewrite steps
                     boolean rewriteStepHappened = false;
                     for (final NonTerminationProbProofNode leaf : curLeaves) { //First, we do not rewrite terms with an occurrence of the looping term
-                        rewriteStepHappened |= computeChildren(ptrs, leaf, loopTerm, stg, false);
+                        rewriteStepHappened |= computeChildren(ptrs, leaf, loopTerm, stg, false, linearPatternCache);
                     }
 
                     if (!rewriteStepHappened) { //If nothing changed, then we also allow rewrite steps at terms with an occurrence of the looping term
                         for (final NonTerminationProbProofNode leaf : curLeaves) {
-                            computeChildren(ptrs, leaf, loopTerm, stg, true);
+                            computeChildren(ptrs, leaf, loopTerm, stg, true, linearPatternCache);
                         }
                     }
                 }
@@ -350,7 +366,7 @@ public class PTRS_SAST_LoopFinderProcessor extends PTRS_SAST_ProblemProcessor {
 
                         //Compute the possible rewrite steps
                         for (final NonTerminationProbProofNode leaf : currentLeaves) {
-                            computeChildren(ptrs, leaf, tree.getValue().getX(), stg, true);
+                            computeChildren(ptrs, leaf, tree.getValue().getX(), stg, true, linearPatternCache);
                         }
                         //If we can disprove PAST (hence SAST), stop
                         if (tree.getMaxValue().compareTo(BigFraction.ONE) >= 0) {
@@ -421,7 +437,8 @@ public class PTRS_SAST_LoopFinderProcessor extends PTRS_SAST_ProblemProcessor {
             final NonTerminationProbProofNode leaf,
             final TRSTerm loopTerm,
             final SymbolTransitionGraph stg,
-            final boolean rewriteIfLoopOccurs) {
+            final boolean rewriteIfLoopOccurs,
+            final Map<Pair<TRSTerm, TRSSubstitution>, Boolean> linearPatternCache) {
         //Get the term and positions
         final Set<ProbabilisticRule> rules = pqtrs.getPR();
         final TRSTerm term = leaf.getValue().getX();
@@ -478,7 +495,7 @@ public class PTRS_SAST_LoopFinderProcessor extends PTRS_SAST_ProblemProcessor {
 
                                 BigFraction countAll = BigFraction.MINUS_ONE;
                                 //Check if we are allowed to use all occurrences
-                                if (allowNonOverlappingCount(loopTerm, child, leaf.getValue().getZ().get(i).getX(), leaf.getValue().getZ().get(i).getY())) {
+                                if (allowNonOverlappingCount(loopTerm, child, leaf.getValue().getZ().get(i).getX(), leaf.getValue().getZ().get(i).getY(), linearPatternCache)) {
                                     countAll = fraction.multiply(
                                         countMatches(child, leaf.getValue().getZ().get(i).getX(), leaf.getValue().getZ().get(i).getY(), false));
                                 }
@@ -517,7 +534,8 @@ public class PTRS_SAST_LoopFinderProcessor extends PTRS_SAST_ProblemProcessor {
         final Pair<NonTerminationProbProofNode, Position> leaf,
         final Pair<Position, Rule> step,
         final ImmutableTriple<ImmutableSet<Rule>, ImmutableMap<FunctionSymbol, FunctionSymbol>, ImmutableMap<Rule, List<Pair<Position, Rule>>>> dps,
-        final PTRSProblem qtrs) {
+        final PTRSProblem qtrs,
+        final Map<Pair<TRSTerm, TRSSubstitution>, Boolean> linearPatternCache) {
 
         //Get the term and positions
         final TRSTerm term = leaf.x.getValue().getX();
@@ -578,7 +596,7 @@ public class PTRS_SAST_LoopFinderProcessor extends PTRS_SAST_ProblemProcessor {
                     for (int i = 0; i < leaf.x.getValue().getZ().size(); i++) {
                         BigFraction countAll = BigFraction.MINUS_ONE;
                         //Check if we are allowed to use all occurrences
-                        if (allowNonOverlappingCount(loopTerm, child, leaf.x.getValue().getZ().get(i).getX(), leaf.x.getValue().getZ().get(i).getY())) {
+                        if (allowNonOverlappingCount(loopTerm, child, leaf.x.getValue().getZ().get(i).getX(), leaf.x.getValue().getZ().get(i).getY(), linearPatternCache)) {
                             countAll = fraction.multiply(
                                 countMatches(child, leaf.x.getValue().getZ().get(i).getX(), leaf.x.getValue().getZ().get(i).getY(), false));
                         }
@@ -606,27 +624,15 @@ public class PTRS_SAST_LoopFinderProcessor extends PTRS_SAST_ProblemProcessor {
     }
 
     /**
-     * Counts how often the baseLoopTerm, with the given repeatingSubstitution applied repeatedly, matches the targetTerm.
-     * Returns -1 if baseLoopTerm does not match targetTerm even once and a substitution is provided.
-     *
-     * @param targetTerm the term to match against
-     * @param baseLoopTerm the term representing the loop's base form
-     * @param repeatingSubstitution the substitution repeatedly applied to baseLoopTerm
-     * @return the number of successful matches, or -1 if no match occurs and a substitution is provided
-     */
-    /**
-     * Cache for the (potentially expensive) linear pattern term check, keyed by base term and
-     * pumping substitution. The result only depends on the pattern term itself, so it is stable
-     * across all children/leaves that share the same base term and substitution.
-     */
-    private final Map<Pair<TRSTerm, TRSSubstitution>, Boolean> linearPatternCache = new HashMap<>();
-
-
-    /**
      * Decides whether we may count non-overlapping (rather than only orthogonal) occurrences of the
      * base term {@code base} (with optional pumping substitution {@code sub}) in the child term.
+     * {@code linearPatternCache} caches the (potentially expensive) linear pattern term check for the current processor call.
      */
-    private boolean allowNonOverlappingCount(final TRSTerm loopTerm, final TRSTerm child, final TRSTerm base, final TRSSubstitution sub) {
+    private boolean allowNonOverlappingCount(final TRSTerm loopTerm,
+        final TRSTerm child,
+        final TRSTerm base,
+        final TRSSubstitution sub,
+        final Map<Pair<TRSTerm, TRSSubstitution>, Boolean> linearPatternCache) {
         if (sub == null) { // Terms Occurrences
             if (loopTerm.isLinear()) { // Linear
                 return true;
@@ -636,7 +642,7 @@ public class PTRS_SAST_LoopFinderProcessor extends PTRS_SAST_ProblemProcessor {
             }
             return false;
         } else { // Pattern Terms Occurrences
-            if (this.linearPatternCache.computeIfAbsent(new Pair<>(base, sub), p -> p.x.isLinearPatternTerm(p.y))) { // Linear
+            if (linearPatternCache.computeIfAbsent(new Pair<>(base, sub), p -> p.x.isLinearPatternTerm(p.y))) { // Linear
                 return true;
             }
             if (child.containsVariablesAsOften(loopTerm.getVariablePositions())) { // NVD
@@ -646,6 +652,15 @@ public class PTRS_SAST_LoopFinderProcessor extends PTRS_SAST_ProblemProcessor {
         }
     }
 
+    /**
+     * Counts how often the baseLoopTerm, with the given repeatingSubstitution applied repeatedly, matches the targetTerm.
+     * Returns -1 if baseLoopTerm does not match targetTerm even once and a substitution is provided.
+     *
+     * @param targetTerm the term to match against
+     * @param baseLoopTerm the term representing the loop's base form
+     * @param repeatingSubstitution the substitution repeatedly applied to baseLoopTerm
+     * @return the number of successful matches, or -1 if no match occurs and a substitution is provided
+     */
     private int countMatches(final TRSTerm targetTerm, final TRSTerm baseLoopTerm, final TRSSubstitution repeatingSubstitution, final boolean onlyOrtho) {
         if (baseLoopTerm == null) {
             return 0;
@@ -759,21 +774,21 @@ public class PTRS_SAST_LoopFinderProcessor extends PTRS_SAST_ProblemProcessor {
             final StringBuilder sb = new StringBuilder();
             final boolean hasPumpingSub = this.loopTree.getValue().getZ().get(this.disproveID).getY() != null;
 
-            sb.append("We are able to disprove SAST via [IJCAR'26].")
+            sb.append("We are able to disprove SAST via " + o.cite(Citation.KASSING_DISS) + ".")
                 .append(o.linebreak())
                 .append(o.newline());
 
             if (!hasPumpingSub) {
                 if(loopTree.getValue().getZ().get(this.disproveID).getX().isLinear()) { //Linear term
-                    sb.append("We use [Thm.11] and count the linear term:")
+                    sb.append("We use Thm. 9.2.6 of " + o.cite(Citation.KASSING_DISS) + " and count the linear term:")
                         .append(o.linebreak())
                         .append(this.loopTree.getValue().getZ().get(this.disproveID).getX());
                 } else if(loopTree.isMaxValueAllCounts()) { //NVD tree
-                    sb.append("We use [Thm.15] on a tree that is NVD and count the term:")
+                    sb.append("We use Thm. 9.2.11 of " + o.cite(Citation.KASSING_DISS) + " on a tree that is NVD and count the term:")
                     .append(o.linebreak())
                     .append(this.loopTree.getValue().getZ().get(this.disproveID).getX());
                 } else { //Orthogonal counts
-                    sb.append("We use [Thm.17] and count the following term at orthogonal positions:")
+                    sb.append("We use Thm. 9.2.15 of " + o.cite(Citation.KASSING_DISS) + " and count the following term at orthogonal positions:")
                     .append(o.linebreak())
                     .append(this.loopTree.getValue().getZ().get(this.disproveID).getX());
                 }
@@ -783,13 +798,13 @@ public class PTRS_SAST_LoopFinderProcessor extends PTRS_SAST_ProblemProcessor {
                 final TRSSubstitution patternSub = this.loopTree.getValue().getZ().get(this.disproveID).getY();
                 if (this.isMaxValueAllCounts && patternBase.isLinearPatternTerm(patternSub)) {
                     //Non-overlapping counting for a linear pattern term
-                    sb.append("We use [Thm.linear-pattern] and count the pumping substitution non-overlapping for the linear pattern term:");
+                    sb.append("We use Thm. 9.3.30 of " + o.cite(Citation.KASSING_DISS) + " and count the pumping substitution non-overlapping for the linear pattern term:");
                 } else if (this.isMaxValueAllCounts) {
                     //Non-overlapping counting in an NVD pattern tree
-                    sb.append("We use [Thm.nvd-pattern] on a pattern tree that is NVD and count the pumping substitution non-overlapping:");
+                    sb.append("We use Thm. 9.3.35 of " + o.cite(Citation.KASSING_DISS) + " on a pattern tree that is NVD and count the pumping substitution non-overlapping:");
                 } else {
                     //Orthogonal counting
-                    sb.append("We use [Thm.28] and count the pumping substitution:");
+                    sb.append("We use Thm. 9.3.16 of " + o.cite(Citation.KASSING_DISS) + " and count the pumping substitution:");
                 }
                 sb.append(o.linebreak())
                     .append(patternSub)

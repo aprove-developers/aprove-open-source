@@ -31,7 +31,8 @@ public class ADP_AST_UsableTermsProcessor extends ADP_AST_ProblemProcessor {
     @Override
     public boolean isAST_ADPApplicable(final ADP_AST_Problem qdp) {
         if (qdp.isBasic()) { /**BASIC**/
-            return qdp.getDependencyGraph().doUnusablePairsExist() || qdp.getReachDependencyGraph().doUnusablePairsExist();
+            // for the reachability component, all edges have to be regarded (the ADPs of I are not in an SCC)
+            return qdp.getDependencyGraph().doUnusablePairsExist() || qdp.getReachDependencyGraph().doUnusablePairsExistOnAllEdges();
         } else { /**FULL and INNERMOST**/
             return qdp.getDependencyGraph().doUnusablePairsExist();
         }
@@ -85,6 +86,8 @@ public class ADP_AST_UsableTermsProcessor extends ADP_AST_ProblemProcessor {
         if (qdp.isBasic()) {
             /**BASIC**/
             final Set<ProbabilisticRule> ReachADPs = qdp.getReach();
+            // usability w.r.t. I u P, i.e., w.r.t. all edges of the reachability graph (not only within SCCs)
+            final Set<TRSFunctionApplication> usableReachTerms = reachGraph.getUsableTermsOnAllEdges();
 
             for (final ProbabilisticRule depTuple : ReachADPs) {
                 //Create new rhs
@@ -97,7 +100,7 @@ public class ADP_AST_UsableTermsProcessor extends ADP_AST_ProblemProcessor {
                     //Create the term
                     final Set<Position> positionsToRemoveAnnos = new HashSet<>();
                     for (final Pair<TRSFunctionApplication, Position> termPositionPair : term.getAnnoSubtermsWithPositions(qdp.getDeAnnoMap())) {
-                        if (reachGraph.isUnusableTerm(termPositionPair.x)) {
+                        if (!usableReachTerms.contains(termPositionPair.x.getStandardRenumbered())) {
                             positionsToRemoveAnnos.add(termPositionPair.y);
                             unusableTermsSet.add(termPositionPair.x);
                         }
@@ -148,10 +151,10 @@ public class ADP_AST_UsableTermsProcessor extends ADP_AST_ProblemProcessor {
         public String export(final Export_Util o, final VerbosityLevel level) {
             final StringBuilder res = new StringBuilder();
             res.append(o.paragraph());
-            if (this.origPQDP.isInnermost()) {
-                res.append("We use the usable terms processor ").append(o.cite(Citation.FLOPS24)).append(".");
-            } else { //full AST
-                res.append("We use the usable terms processor ").append(" (!PROTOTYPE!) ").append(".");
+            if (!this.origPQDP.isBasic()) { //innermost and full AST
+                res.append("We use the usable terms processor ").append(o.cite(Citation.KASSING_DISS)).append(".");
+            } else { //basic AST
+                res.append("We use the usable terms processor ").append(o.cite(Citation.JPK60)).append(".");
             }
             res.append(o.linebreak());
             res.append("The approximation of the Dependency Graph ")

@@ -53,7 +53,7 @@ public class ADP_SAST_ProbabilityRemovalProcessor extends ADP_SAST_ProblemProces
                 }
             }
         }
-        final QDPProblem newqdp = QDPProblem.create(ImmutableCreator.create(depPairs), newQtrs, true);
+        final QDPProblem newqdp = QDPProblem.create(ImmutableCreator.create(depPairs), newQtrs, false);
 
         final SAST_ADPProbabilityRemovalProof NPPproof = new SAST_ADPProbabilityRemovalProof(origPqdp.getInnermost());
 

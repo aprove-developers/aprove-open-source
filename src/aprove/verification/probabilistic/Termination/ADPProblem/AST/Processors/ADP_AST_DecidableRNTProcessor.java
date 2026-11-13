@@ -51,7 +51,7 @@ public class ADP_AST_DecidableRNTProcessor extends ADP_AST_ProblemProcessor {
         final PTRSProblem underlying = getUnderlyingPTRS(adp);
         final RNTDecisionProcedure.Verdict verdict = RNTDecisionProcedure.decide(underlying, aborter);
         if (verdict.ast) {
-            return ResultFactory.proved(new ADPDecidableRNTProof(underlying, verdict, adp.isInnermost()));
+            return ResultFactory.proved(new ADPDecidableRNTProof(underlying, verdict, adp.isInnermost(), adp.isBasic()));
         }
         return ResultFactory.unsuccessful("The underlying PTRS of the ADP problem is not AST, which does not allow any conclusion for the ADP problem.");
     }
@@ -90,17 +90,23 @@ public class ADP_AST_DecidableRNTProcessor extends ADP_AST_ProblemProcessor {
         private final PTRSProblem underlying;
         private final RNTDecisionProcedure.Verdict verdict;
         private final boolean innermost;
+        private final boolean basic;
 
-        ADPDecidableRNTProof(final PTRSProblem underlying, final RNTDecisionProcedure.Verdict verdict, final boolean innermost) {
+        ADPDecidableRNTProof(final PTRSProblem underlying,
+            final RNTDecisionProcedure.Verdict verdict,
+            final boolean innermost,
+            final boolean basic) {
             this.underlying = underlying;
             this.verdict = verdict;
             this.innermost = innermost;
+            this.basic = basic;
         }
 
         @Override
         public String export(final Export_Util o, final VerbosityLevel level) {
             final StringBuilder s = new StringBuilder();
-            s.append(o.export("We switch back from the ADP problem to its underlying PTRS, which results from removing all annotations "
+            s.append(o.export("We switch back from the ADP problem to its underlying PTRS" + (this.basic ? "" : " " + o.cite(Citation.KASSING_DISS))
+                + ", which results from removing all annotations "
                 + "and flags. Every chain tree of the ADP problem is a rewrite tree of the underlying PTRS with the same structure "
                 + "and probabilities, so if the underlying PTRS is AST, then the ADP problem is "
                 + (this.innermost ? "innermost " : "")

@@ -421,10 +421,10 @@ public class ADP_AST_ReductionPairProcessor extends ADP_AST_ProblemProcessor {
             StringBuilder result;
             result = new StringBuilder();
             result.append(o.paragraph());
-            if (this.origPQDP.isInnermost()) {
-                result.append("We use the reduction pair processor " + o.cite(Citation.FLOPS24) + ".");
-            } else { //full AST
-                result.append("We use the reduction pair processor " + " (!PROTOTYPE!) " + ".");
+            if (!this.origPQDP.isBasic()) { //innermost and full AST
+                result.append("We use the reduction pair processor " + o.cite(Citation.KASSING_DISS) + ".");
+            } else { //basic AST
+                result.append("We use the reduction pair processor " + o.cite(Citation.JPK60) + ".");
             }
             result.append(o.linebreak());
             result.append("The following pairs can be oriented strictly and we delete all annotations:");

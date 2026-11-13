@@ -96,7 +96,7 @@ public class ProbQUsableRules {
      * @param adp
      * @return true iff the usable rules for this dp are non-empty
      */
-    public boolean hasUsableRules(final ProbabilisticRule adp) {
+    public synchronized boolean hasUsableRules(final ProbabilisticRule adp) {
         final Node<Set<ProbabilisticRule>> node = addADP(adp).y;
         return !this.depGraph.getOut(node).isEmpty();
     }
@@ -133,7 +133,7 @@ public class ProbQUsableRules {
      * @param afs
      * @return the set of usable rules, this set may be modified.
      */
-    public Set<ProbabilisticRule> getUsableRules(final Collection<ProbabilisticRule> adps,
+    public synchronized Set<ProbabilisticRule> getUsableRules(final Collection<ProbabilisticRule> adps,
         final QActiveCondition.Afs afs) {
         final Set<Node<Set<ProbabilisticRule>>> nodesForADPs = addADPs(adps);
         Set<Node<Set<ProbabilisticRule>>> reachable;
@@ -165,11 +165,52 @@ public class ProbQUsableRules {
     }
 
     /**
+     * computes the usable rules U_A(t) of a term t (annotations are ignored), i.e., all rules whose root
+     * symbol occurs in t or (recursively) in the right-hand side of a usable rule
+     *
+     * @param t
+     * @param ruleMap   the rules (by root symbol of their left-hand side)
+     * @param deAnnoMap maps annotated to non-annotated symbols
+     * @return the set of usable rules, this set may be modified.
+     */
+    public static Set<ProbabilisticRule> getUsableRulesOfTerm(final TRSTerm t,
+        final Map<FunctionSymbol, ? extends Set<ProbabilisticRule>> ruleMap,
+        final Map<FunctionSymbol, FunctionSymbol> deAnnoMap) {
+        final Set<ProbabilisticRule> usable = new LinkedHashSet<>();
+        final Set<FunctionSymbol> seen = new LinkedHashSet<>();
+        final Deque<FunctionSymbol> todo = new ArrayDeque<>();
+        for (final FunctionSymbol f : t.getFunctionSymbols()) {
+            final FunctionSymbol g = deAnnoMap.getOrDefault(f, f);
+            if (seen.add(g)) {
+                todo.push(g);
+            }
+        }
+        while (!todo.isEmpty()) {
+            final Set<ProbabilisticRule> rules = ruleMap.get(todo.pop());
+            if (rules != null) {
+                for (final ProbabilisticRule rule : rules) {
+                    if (usable.add(rule)) {
+                        for (final Entry<Pair<TRSTerm, BigFraction>, Integer> entry : rule.getRight().getProbabilityMapping().entrySet()) {
+                            for (final FunctionSymbol f : entry.getKey().getKey().getFunctionSymbols()) {
+                                final FunctionSymbol g = deAnnoMap.getOrDefault(f, f);
+                                if (seen.add(g)) {
+                                    todo.push(g);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return usable;
+    }
+
+    /**
      * computes whether the ADP satisfies the qr-Normal condition
      *
      * @param adp
      */
-    public boolean getQRNormal(final ProbabilisticRule adp) {
+    public synchronized boolean getQRNormal(final ProbabilisticRule adp) {
         if (this.nodeToQRNormal == null) {
             return true;
         } else {
@@ -183,7 +224,7 @@ public class ProbQUsableRules {
      *
      * @param adps
      */
-    public boolean getQRNormal(final Iterable<? extends ProbabilisticRule> adps) {
+    public synchronized boolean getQRNormal(final Iterable<? extends ProbabilisticRule> adps) {
         if (this.nodeToQRNormal == null) {
         } else {
             for (final ProbabilisticRule dp : adps) {
@@ -226,6 +267,40 @@ public class ProbQUsableRules {
             }
             return capped;
         }
+    }
+
+    /**
+     * computes Cap^{Sigma_D}_{R^-1}(u) (where vars are from 2. prefix) as needed for the forward instantiation
+     * processor for full rewriting: in addition to Cap_{R^-1}(u), all subterms with a (non-annotated) defined
+     * root symbol are replaced by fresh variables.
+     *
+     * @param u              a (possibly annotated) term
+     * @param reverseRuleMap the reversed rules R^-1
+     * @param defined        the (non-annotated) defined symbols
+     */
+    public static TRSTerm computeCapRminusOneDefined(final TRSTerm u,
+        final Map<FunctionSymbol, ? extends Set<Rule>> reverseRuleMap,
+        final Set<FunctionSymbol> defined) {
+        if (reverseRuleMap.get(null) != null) { // collapsing, everything can be reached
+            return ProbQUsableRules.Y;
+        }
+        final Pair<TRSTerm, Integer> capped = ProbQUsableRules.computeCapRminusOne(u, 0, reverseRuleMap);
+        return ProbQUsableRules.replaceDefinedSubterms(capped.x, new int[] { capped.y }, defined);
+    }
+
+    private static TRSTerm replaceDefinedSubterms(final TRSTerm t, final int[] nr, final Set<FunctionSymbol> defined) {
+        if (t.isVariable()) {
+            return t;
+        }
+        final TRSFunctionApplication ft = (TRSFunctionApplication) t;
+        if (defined.contains(ft.getRootSymbol())) {
+            return TRSTerm.createVariable(TRSTerm.SECOND_STANDARD_PREFIX + "_" + nr[0]++);
+        }
+        final List<TRSTerm> newArgs = new ArrayList<>(ft.getArguments().size());
+        for (final TRSTerm arg : ft.getArguments()) {
+            newArgs.add(ProbQUsableRules.replaceDefinedSubterms(arg, nr, defined));
+        }
+        return TRSTerm.createFunctionApplication(ft.getRootSymbol(), ImmutableCreator.create(newArgs));
     }
 
     /**

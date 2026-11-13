@@ -114,6 +114,15 @@ public class PTRS_AST_LoopWalkFinderProcessor extends PTRS_AST_ProblemProcessor 
                 // The terms in our trees are always in standard representation
                 loopTerm = loopTerm.getStandardRenumbered();
 
+                // with basic start terms, the loop term is the start term of the disproof, so it has to be basic
+                // (for full rewriting, it suffices that a basic term reaches an instance of it in one step)
+                if (ptrs.isBasic()
+                    && !(ptrs.getRewriteStrategy() == RewriteStrategy.FULL
+                        ? ProbabilisticRule.isReachedFromBasicTerm(loopTerm, ptrs.getPR())
+                        : ProbabilisticRule.isBasicTerm(loopTerm, ptrs.getPR()))) {
+                    continue;
+                }
+
                 NonTerminationProbProofNode tree = null;
                 //Gucken ob loopTerm schon ausgewertet wurde
                 for (final NonTerminationProbProofNode oldTree : trees) {
@@ -301,8 +310,11 @@ public class PTRS_AST_LoopWalkFinderProcessor extends PTRS_AST_ProblemProcessor 
                 tree.collectLeaves(curLeaves);
 
                 for (final NonTerminationProbProofNode leaf : curLeaves) {
-                    //If there is a leaf with probability 1, then we have a loop walk.
-                    if (leaf.getValue().y.equals(BigFraction.ONE)) {
+                    //If there is a leaf with probability 1 (that is not the root and contains an instance of the
+                    //loop term), then we have a loop walk.
+                    if (leaf != tree
+                        && leaf.getValue().y.equals(BigFraction.ONE)
+                        && NonTerminationProbProofNode.containsInstanceOf(leaf.getValue().getX(), tree.getValue().getX())) {
                         return ResultFactory.disproved(new ASTLoopFinderProof(tree, rewriteSeq, tree.isMaxValueAllCounts(), true));
                     }
                 }
@@ -736,11 +748,11 @@ public class PTRS_AST_LoopWalkFinderProcessor extends PTRS_AST_ProblemProcessor 
                 final VerbosityLevel level) {
             final StringBuilder sb = new StringBuilder();
 
-            sb.append("We are able to disprove AST via [IJCAR'26].")
+            sb.append("We are able to disprove AST via " + o.cite(Citation.KASSING_DISS) + ".")
                 .append(o.linebreak())
                 .append(o.newline());
 
-            sb.append("We have a tree where the root occurs in every leaf, so we can embed a loop walk [Thm.5].");
+            sb.append("We have a tree where the root occurs in every leaf, so we can embed a loop walk (Thm. 9.1.2 of " + o.cite(Citation.KASSING_DISS) + ").");
 
             final List<Integer> path = new ArrayList<>();
             path.add(1);

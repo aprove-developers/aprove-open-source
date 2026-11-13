@@ -335,7 +335,7 @@ public class PTRS_Cpx_DirectPoloProcessor extends PTRS_Cpx_Processor {
             StringBuilder result;
             result = new StringBuilder();
             result.append(o.paragraph());
-            result.append("We use the direct application of polynomial interpretations " + o.cite(Citation.ADY19) + ".");
+            result.append("We use the direct application of polynomial interpretations " + o.cite(new Citation[] { Citation.ADY19, Citation.KASSING_DISS }) + ".");
             result.append(o.linebreak());
             result.append("Using the following Interpretation: ");
             result.append(o.linebreak());
@@ -356,7 +356,7 @@ public class PTRS_Cpx_DirectPoloProcessor extends PTRS_Cpx_Processor {
         public SolverFactory order;
         public boolean constant = false;
         public boolean exponential = false;
-        public boolean allstrict = false;
+        public boolean allstrict = true;
     }
 
 }

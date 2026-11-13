@@ -85,7 +85,7 @@ public class PTRS_ToInnermostProcessor extends PTRS_ProblemProcessor {
         @Override
         public String export(final Export_Util o, final VerbosityLevel level) {
             final StringBuilder proof = new StringBuilder();
-            proof.append(o.export("Switched from non-innermost to innermost rewriting" + o.cite(Citation.FoSSaCS24) + "."));
+            proof.append(o.export("Switched from non-innermost to innermost rewriting " + o.cite(Citation.KASSING_DISS) + "."));
             proof.append(o.paragraph());
             proof.append(o.escape("The system is non-overlapping, left-linear and "));
             if (this.onlyNDProof) {

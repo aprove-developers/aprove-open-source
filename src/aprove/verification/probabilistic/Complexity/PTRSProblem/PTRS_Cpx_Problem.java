@@ -55,7 +55,7 @@ public class PTRS_Cpx_Problem extends DefaultBasicObligation implements Immutabl
         this.ruleMap = null;
         final Set<FunctionSymbol> signature = CollectionUtils.getFunctionSymbols(this.PR);
         this.signature = ImmutableCreator.create(signature);
-        this.hashCode = Objects.hash(this.PR);
+        this.hashCode = Objects.hash(this.PR, this.strat, this.basic);
 
         calculateDefSymbolsAndRuleMap();
     }
@@ -73,7 +73,7 @@ public class PTRS_Cpx_Problem extends DefaultBasicObligation implements Immutabl
         this.ruleMap = null;
         final Set<FunctionSymbol> signature = CollectionUtils.getFunctionSymbols(this.PR);
         this.signature = ImmutableCreator.create(signature);
-        this.hashCode = Objects.hash(this.PR);
+        this.hashCode = Objects.hash(this.PR, this.strat, this.basic);
 
         calculateDefSymbolsAndRuleMap();
     }
@@ -214,7 +214,7 @@ public class PTRS_Cpx_Problem extends DefaultBasicObligation implements Immutabl
 
     public boolean isDuplicating() {
         for (final ProbabilisticRule rule : getPR()) {
-            if (!rule.isDuplicating()) {
+            if (rule.isDuplicating()) {
                 return true;
             }
         }
@@ -234,7 +234,7 @@ public class PTRS_Cpx_Problem extends DefaultBasicObligation implements Immutabl
 
     public boolean isVariableOccDecreasing() {
         for (final ProbabilisticRule rule : getPR()) {
-            if (!rule.isVariableOccDecreasing()) {
+            if (rule.isVariableOccDecreasing()) {
                 return true;
             }
         }
@@ -422,6 +422,8 @@ public class PTRS_Cpx_Problem extends DefaultBasicObligation implements Immutabl
         }
         final PTRS_Cpx_Problem that = (PTRS_Cpx_Problem) o;
         return this.hashCode == that.hashCode &&
-            Objects.equals(this.PR, that.PR);
+            Objects.equals(this.PR, that.PR) &&
+            this.strat == that.strat &&
+            this.basic == that.basic;
     }
 }

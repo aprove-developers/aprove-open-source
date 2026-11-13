@@ -8,11 +8,11 @@ import aprove.prooftree.Export.Utility.*;
  */
 public enum ADP_Cpx_Transformation {
 
-        Instantiation("instantiating", Citation.FLOPS24),
-        ForwardInstantiation("forward instantiating", Citation.FLOPS24),
-        RuleOverlapInstantiation("rule overlap instantiation", Citation.FLOPS24),
-        Rewriting("rewriting", Citation.FLOPS24),
-        Narrowing("narrowing", Citation.FLOPS24);
+        Instantiation("instantiating", Citation.KASSING_DISS),
+        ForwardInstantiation("forward instantiating", Citation.KASSING_DISS),
+        RuleOverlapInstantiation("rule overlap instantiation", Citation.KASSING_DISS),
+        Rewriting("rewriting", Citation.KASSING_DISS),
+        Narrowing("narrowing", Citation.KASSING_DISS);
 
     private final String predicate;
     private final Citation citation;

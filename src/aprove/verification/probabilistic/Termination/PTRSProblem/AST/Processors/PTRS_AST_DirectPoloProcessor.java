@@ -320,7 +320,7 @@ public class PTRS_AST_DirectPoloProcessor extends PTRS_AST_ProblemProcessor {
             StringBuilder result;
             result = new StringBuilder();
             result.append(o.paragraph());
-            result.append("We use the direct application of polynomial interpretations " + o.cite(Citation.CADE23) + ".");
+            result.append("We use the direct application of polynomial interpretations " + o.cite(Citation.KASSING_DISS) + ".");
             result.append(o.linebreak());
             for (int i = 0; i < this.orderList.size(); i++) {
                 result.append("We can order the following rules strictly: ");
@@ -345,7 +345,7 @@ public class PTRS_AST_DirectPoloProcessor extends PTRS_AST_ProblemProcessor {
     public static class Arguments {
 
         public SolverFactory order;
-        public boolean allstrict = false;
+        public boolean allstrict = true;
     }
 
 }

@@ -119,8 +119,8 @@ public class ADP_SAST_ReductionPairProcessor extends ADP_SAST_ProblemProcessor {
             }
         }
 
-        // No dependency tuple could be oriented strictly: the processor made no progress.
-        if (removedDepTuples.isEmpty()) {
+        // No dependency tuple of S could be oriented strictly: the processor made no progress.
+        if (newSadps.size() == oriqSast_ADP.getS().size()) {
             return ResultFactory.unsuccessful("Reduction pair oriented no dependency tuple strictly; no progress");
         }
 
@@ -174,8 +174,9 @@ public class ADP_SAST_ReductionPairProcessor extends ADP_SAST_ProblemProcessor {
         final Interpretation interpretation,
         final Abortion aborter) {
 
-        final FormulaFactory<Diophantine> ff = NonCountingCircuitFactory.create(SplitMode.FLATTEN, SplitMode.LEFT_COMB); //TODO: Check these parameters
+        final FormulaFactory<Diophantine> ff = NonCountingCircuitFactory.create(SplitMode.FLATTEN, SplitMode.LEFT_COMB);
 
+        final Set<ProbabilisticRule> allDepTuples = sast_ADPProblem.getPwithOnlyAnno();
         final Set<ProbabilisticRule> depTuples = sast_ADPProblem.getSwithOnlyAnno();
         final Set<ProbabilisticRule> probRules = sast_ADPProblem.getSWithQ();
 
@@ -185,7 +186,7 @@ public class ADP_SAST_ReductionPairProcessor extends ADP_SAST_ProblemProcessor {
         for (final ProbabilisticRule probRule : probRules) {
             expectedValueConstraintList.add(createRuleFormulaExpectation(ff, probRule, interpretation, aborter));
         }
-        for (final ProbabilisticRule depTuple : depTuples) {
+        for (final ProbabilisticRule depTuple : allDepTuples) {
             expectedValueConstraintList.add(createDepTupleFormulaExpectation(ff, depTuple, interpretation, sast_ADPProblem, aborter));
         }
         final Formula<Diophantine> expectedValueConstraintFormula = ff.buildAnd(expectedValueConstraintList);
@@ -439,7 +440,7 @@ public class ADP_SAST_ReductionPairProcessor extends ADP_SAST_ProblemProcessor {
             result = new StringBuilder();
             result.append(o.paragraph());
             if (this.origPQDP.getInnermost()) {
-                result.append("We use the reduction pair processor " + "(Leon's master's thesis)" + ".");
+                result.append("We use the reduction pair processor " + o.cite(Citation.KASSING_DISS) + ".");
             } else { //full SAST
                 result.append("We use the reduction pair processor " + " (!PROTOTYPE!) " + ".");
             }

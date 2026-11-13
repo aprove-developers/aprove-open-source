@@ -68,13 +68,9 @@ public class ADP_AST_SubtermCriterion extends ADP_AST_ProblemProcessor {
             return ADP_AST_SubtermCriterion.headSymbolsAreAtLeastUnary(qdp)
                 && qdp.hasSingleAnnotationInADPs();
 
-        } else if (qdp.isBasic()) {/**BASIC**/
-            //Same as above
-            return ADP_AST_SubtermCriterion.headSymbolsAreAtLeastUnary(qdp)
-                && qdp.hasSingleAnnotationInADPs();
-
-        } else {/**FULL**/
-            //Not applicable
+        } else {/**FULL and BASIC (non-innermost)**/
+            // Not applicable: the subterm criterion is only sound for innermost rewriting;
+            // basic start terms do not help, as defined symbols below an annotation may still be created by rules
             return false;
         }
     }
@@ -155,9 +151,7 @@ public class ADP_AST_SubtermCriterion extends ADP_AST_ProblemProcessor {
                 // there exists a term in the rhs that is ordered strictly
                 final Set<TRSFunctionApplication> rhsDPsOnlySet = rhs.getAnnoSubterms(origqdp.getDeAnnoMap());
 
-                if (rhsDPsOnlySet.isEmpty()) {
-                    isNonStrict = false;
-                } else {
+                if (!rhsDPsOnlySet.isEmpty()) {
                     final TRSTerm rhsOnlyDP = rhsDPsOnlySet.iterator().next();
                     if (order.solves(Constraint.fromTerms(rule.getLeft(), rhsOnlyDP, OrderRelation.GR))) {
                         isNonStrict = false;
@@ -211,7 +205,7 @@ public class ADP_AST_SubtermCriterion extends ADP_AST_ProblemProcessor {
         public String export(final Export_Util o, final VerbosityLevel level) {
             StringBuilder result;
             result = new StringBuilder();
-            result.append("We use the subterm criterion " + o.cite(Citation.FLOPS24JOURNAL) + ".");
+            result.append("We use the subterm criterion " + o.cite(Citation.KASSING_DISS) + ".");
             result.append(o.cond_linebreak());
             result.append("The following pairs can be oriented strictly and are deleted.");
             result.append(o.cond_linebreak());

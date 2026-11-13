@@ -33,7 +33,7 @@ public class ADP_AST_InstProcessor extends ADP_AST_TransformationProcessor {
 
     @Override
     public boolean isAST_ADPApplicable(final ADP_AST_Problem qdp) {
-        if (this.initialADPs) { //Does not work for the first component of a basic problem (I,P)
+        if (this.initialADPs || qdp.isBasic()) { //Does not work for basic problems (I,P), see the super class
             return false;
         } else {
             return true;
@@ -129,7 +129,14 @@ public class ADP_AST_InstProcessor extends ADP_AST_TransformationProcessor {
 
         final AST_TransformationHeuristic heuristic = new InstantiationVariableHeuristic(ellSharp, newDTs);
 
-        return new Quintuple<>(heuristic, YNMImplication.EQUIVALENT, resDTs, resRules, null);
+        // complete for iAST, but for AST only if the instantiated ADP is linear
+        final boolean complete = !posQDT.isBasic()
+            && (posQDT.isInnermost() || origNode.getObject().isLinear());
+        return new Quintuple<>(heuristic,
+            complete ? YNMImplication.EQUIVALENT : YNMImplication.SOUND,
+            resDTs,
+            resRules,
+            null);
     }
 
     static class InstantiationVariableHeuristic implements AST_TransformationHeuristic {

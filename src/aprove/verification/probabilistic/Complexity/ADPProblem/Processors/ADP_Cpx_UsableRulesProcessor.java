@@ -79,7 +79,7 @@ public class ADP_Cpx_UsableRulesProcessor extends ADP_Cpx_ProblemProcessor {
         public String export(final Export_Util o, final VerbosityLevel level) {
             final StringBuilder res = new StringBuilder();
             res.append(o.paragraph());
-            res.append("We use the usable rules processor."); // Add Citation
+            res.append("We use the usable rules processor " + o.cite(Citation.KASSING_DISS) + ".");
             res.append(o.linebreak());
             res.append("We can deactivate the flags for all non-usable rules ");
             res.append(o.cite(Citation.FROCOS05));

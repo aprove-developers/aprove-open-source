@@ -67,7 +67,7 @@ public class ADP_Cpx_KnowledgePropagationProcessor extends ADP_Cpx_ProblemProces
         public String export(final Export_Util o, final VerbosityLevel level) {
             final StringBuilder res = new StringBuilder();
             res.append(o.paragraph());
-            res.append("We use the knowledge propagation processor .");  // Add Citation;
+            res.append("We use the knowledge propagation processor " + o.cite(Citation.KASSING_DISS) + ".");
             res.append(o.linebreak());
             res.append("We can remove rules from S, if in the dependency graph no predecessor is in S ");
             res.append("(all predecessors have a known complexity bound).");
