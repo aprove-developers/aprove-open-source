@@ -388,13 +388,9 @@ public class SimplePolyConstraint implements Immutable, Comparable<SimplePolyCon
             BigInteger value = this.simplePoly.getNumericalAddend();
             switch (this.type) {
             case EQ :
-                if (value.signum() == 0) {
-                    return true;
-                }
+                return value.signum() == 0;
             case GE :
-                if (value.signum() >= 0) {
-                    return true;
-                }
+                return value.signum() >= 0;
             }
         }
         return false;
