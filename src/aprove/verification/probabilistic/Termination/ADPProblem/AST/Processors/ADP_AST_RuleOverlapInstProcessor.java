@@ -127,7 +127,8 @@ public class ADP_AST_RuleOverlapInstProcessor extends ADP_AST_TransformationProc
                 boolean isCaptured = false;
                 for (final NarrowingPos narrowForTarget : narrowListForTarget) {
                     final TRSSubstitution pi = narrowForTarget.mgu;
-                    if (pi.isInstanceOf(tau)) {
+                    // covered: pi is more general than tau, i.e., tau = pi rho for some rho
+                    if (tau.isInstanceOf(pi)) {
                         isCaptured = true;
                     }
                 }

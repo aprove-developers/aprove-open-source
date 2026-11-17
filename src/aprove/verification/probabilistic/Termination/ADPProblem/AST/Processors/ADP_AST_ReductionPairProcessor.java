@@ -17,6 +17,7 @@ import aprove.verification.dpframework.Orders.*;
 import aprove.verification.dpframework.Orders.Solvers.*;
 import aprove.verification.dpframework.Orders.Utility.POLO.*;
 import aprove.verification.oldframework.Algebra.Polynomials.*;
+import aprove.verification.oldframework.BasicStructures.FunctionSymbol;
 import aprove.verification.oldframework.Logic.*;
 import aprove.verification.oldframework.PropositionalLogic.*;
 import aprove.verification.oldframework.PropositionalLogic.Formulae.*;
@@ -109,6 +110,21 @@ public class ADP_AST_ReductionPairProcessor extends ADP_AST_ProblemProcessor {
     }
 
     /**
+     * The constraints also interpret the de-annotated versions of the annotated symbols. Such a symbol does not
+     * occur in the problem anymore if all of its rules and all of its unannotated occurrences have been removed.
+     */
+    private static Set<FunctionSymbol> getSignatureWithDeAnnoSymbols(final ADP_AST_Problem ast_ADPProblem) {
+        final Set<FunctionSymbol> signature = new LinkedHashSet<>(ast_ADPProblem.getSignature());
+        for (final FunctionSymbol f : ast_ADPProblem.getSignature()) {
+            final FunctionSymbol deAnno = ast_ADPProblem.getDeAnnoMap().get(f);
+            if (deAnno != null) {
+                signature.add(deAnno);
+            }
+        }
+        return signature;
+    }
+
+    /**
      * The SMT-Solving part of the processor.
      * This includes the creation of an interpretation, the formula about diophantine constraints
      * and the search for a satisfying interpretation via some solver.
@@ -122,7 +138,7 @@ public class ADP_AST_ReductionPairProcessor extends ADP_AST_ProblemProcessor {
     private POLO findOrdering(final ADP_AST_Problem ast_ADPProblem, final boolean allstrict, final Abortion aborter)
         throws AbortionException {
 
-        final POLOSolver solver = this.order.getMLPOLOSolver(ast_ADPProblem.getSignature(), aborter);
+        final POLOSolver solver = this.order.getMLPOLOSolver(getSignatureWithDeAnnoSymbols(ast_ADPProblem), aborter);
         solver.setAllowWeakMonotonicity(true);
 
         final Formula<Diophantine> fml = createFormula(ast_ADPProblem, solver.getInterpretation(), aborter);
@@ -421,10 +437,10 @@ public class ADP_AST_ReductionPairProcessor extends ADP_AST_ProblemProcessor {
             StringBuilder result;
             result = new StringBuilder();
             result.append(o.paragraph());
-            if (this.origPQDP.isInnermost()) {
-                result.append("We use the reduction pair processor " + o.cite(Citation.FLOPS24) + ".");
-            } else { //full AST
-                result.append("We use the reduction pair processor " + " (!PROTOTYPE!) " + ".");
+            if (!this.origPQDP.isBasic()) { //innermost and full AST
+                result.append("We use the reduction pair processor " + o.cite(Citation.KASSING_DISS) + ".");
+            } else { //basic AST
+                result.append("We use the reduction pair processor " + o.cite(Citation.JPK60) + ".");
             }
             result.append(o.linebreak());
             result.append("The following pairs can be oriented strictly and we delete all annotations:");

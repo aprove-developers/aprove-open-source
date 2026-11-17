@@ -154,6 +154,22 @@ public class ADP_Cpx_ReductionPairProcessor extends ADP_Cpx_ProblemProcessor {
     }
 
     /**
+     * The constraints also interpret the de-annotated versions of the annotated symbols. Such a symbol does not
+     * occur in the problem anymore if all of its rules and all of its unannotated occurrences have been removed.
+     * If it is not defined anymore, then it is treated as a constructor.
+     */
+    private static Set<FunctionSymbol> getSignatureWithDeAnnoSymbols(final ADP_Cpx_Problem CpxADPProblem) {
+        final Set<FunctionSymbol> signature = new LinkedHashSet<>(CpxADPProblem.getSignature());
+        for (final FunctionSymbol f : CpxADPProblem.getSignature()) {
+            final FunctionSymbol deAnno = CpxADPProblem.getDeAnnoMap().get(f);
+            if (deAnno != null) {
+                signature.add(deAnno);
+            }
+        }
+        return signature;
+    }
+
+    /**
      * The SMT-Solving part of the processor.
      * This includes the creation of an interpretation, the formula about diophantine constraints
      * and the search for a satisfying interpretation via some solver.
@@ -167,7 +183,7 @@ public class ADP_Cpx_ReductionPairProcessor extends ADP_Cpx_ProblemProcessor {
     private POLO findOrdering(final ADP_Cpx_Problem CpxADPProblem, final boolean allstrict, final Abortion aborter)
         throws AbortionException {
 
-        final Set<FunctionSymbol> constructorSig = new LinkedHashSet<>(CpxADPProblem.getSignature());
+        final Set<FunctionSymbol> constructorSig = getSignatureWithDeAnnoSymbols(CpxADPProblem);
         final Set<FunctionSymbol> definedSig = CpxADPProblem.getDefSignature();
         constructorSig.removeAll(definedSig);
 
@@ -246,7 +262,7 @@ public class ADP_Cpx_ReductionPairProcessor extends ADP_Cpx_ProblemProcessor {
         final Interpretation interpretation,
         final Abortion aborter) {
 
-        final Set<FunctionSymbol> constructorSig = new LinkedHashSet<>(CpxADPProblem.getSignature());
+        final Set<FunctionSymbol> constructorSig = getSignatureWithDeAnnoSymbols(CpxADPProblem);
         final Set<FunctionSymbol> definedSig = CpxADPProblem.getDefSignature();
         constructorSig.removeAll(definedSig);
 
@@ -262,7 +278,7 @@ public class ADP_Cpx_ReductionPairProcessor extends ADP_Cpx_ProblemProcessor {
         }
 
         if (this.constant) {
-            for (final FunctionSymbol f : CpxADPProblem.getSignature()) {
+            for (final FunctionSymbol f : getSignatureWithDeAnnoSymbols(CpxADPProblem)) {
                 for (int i = 0; i < f.getArity(); i++) {
                     final Formula<Diophantine> helpFormula = ff.buildTheoryAtom(interpretation.getConstantConstraintForLinearInterpretation(f, i));
                     resultFormulaList.add(helpFormula);
@@ -444,7 +460,7 @@ public class ADP_Cpx_ReductionPairProcessor extends ADP_Cpx_ProblemProcessor {
         for (final Entry<Pair<TRSTerm, BigFraction>, Integer> entry : rule.getRight().getProbabilityMapping().entrySet()) {
             final TRSTerm term = entry.getKey().getKey();
             final BigFraction prob = entry.getKey().getValue();
-            entry.getValue();
+            final Integer amount = entry.getValue();
             // Adding all annotated subterms interpretations to setPoly
             VarPolynomial setPoly = VarPolynomial.ZERO;
             for (final Pair<TRSFunctionApplication, Position> annoSubterm : term.getAnnoSubtermsWithPositions(CpxADPProblem.getDeAnnoMap())) {
@@ -454,7 +470,9 @@ public class ADP_Cpx_ReductionPairProcessor extends ADP_Cpx_ProblemProcessor {
             final BigInteger multipliesProb = prob.multiply(multiplier).reduce().getNumerator();
 
             // Adding setpoly, multiplied by the amount, to the rhs expected value
-            rhsExpectedPoly = rhsExpectedPoly.plus(setPoly.times(SimplePolynomial.create(multipliesProb)));
+            for (int i = 0; i < amount; i++) {
+                rhsExpectedPoly = rhsExpectedPoly.plus(setPoly.times(SimplePolynomial.create(multipliesProb)));
+            }
         }
 
         // We need to multiply the lhs by the total amount we have on the rhs side to compare with the expected value
@@ -497,7 +515,7 @@ public class ADP_Cpx_ReductionPairProcessor extends ADP_Cpx_ProblemProcessor {
             StringBuilder result;
             result = new StringBuilder();
             result.append(o.paragraph());
-            result.append("We use the reduction pair processor.");// Add Citation
+            result.append("We use the reduction pair processor " + o.cite(Citation.KASSING_DISS) + ".");
             result.append(o.linebreak());
             result.append("The following pairs can be oriented strictly and are moved from S:");
             result.append(o.cond_linebreak());

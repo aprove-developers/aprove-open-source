@@ -25,7 +25,7 @@ public class ADP_AST_UsableRulesProcessor extends ADP_AST_ProblemProcessor {
     @Override
     public boolean isAST_ADPApplicable(final ADP_AST_Problem qdp) {
         if (!qdp.isInnermost() && !qdp.isBasic()) {
-            // no usable rules processor possible in non-innermost case or if not basic
+            // no usable rules processor possible for full rewriting with arbitrary start terms
             return false;
         }
         if (qdp.isBasic()) {
@@ -81,13 +81,13 @@ public class ADP_AST_UsableRulesProcessor extends ADP_AST_ProblemProcessor {
             final StringBuilder res = new StringBuilder();
             res.append(o.paragraph());
             if (this.origQDP.isInnermost()) {
-                res.append("We use the usable rules processor ").append(o.cite(Citation.FLOPS24)).append(".");
+                res.append("We use the usable rules processor ").append(o.cite(Citation.KASSING_DISS)).append(".");
             } else { //full AST
-                res.append("We use the usable rules processor for basic start terms ").append(" (!PROTOTYPE!) ").append(".");
+                res.append("We use the usable rules processor for basic start terms ").append(o.cite(Citation.JPK60)).append(".");
             }
             res.append(o.linebreak())
                 .append("Hence, by the usable rules processor ")
-                .append(o.cite(Citation.FLOPS24))
+                .append(o.cite(this.origQDP.isInnermost() ? Citation.KASSING_DISS : Citation.JPK60))
                 .append(" we can deactivate the flags for all non-usable rules ")
                 .append(o.cite(Citation.FROCOS05));
 

@@ -122,7 +122,7 @@ public class PQTRS_SAST_ToADPProblemProcessor extends Processor.ProcessorSkeleto
             res.append(o.paragraph());
             if (this.innermost) {
                 res.append("A PQTRS (R,Q) is innermost SAST iff extended ADP(R) is innermost SAST (Chain-Criterion) ")
-                    .append("(Leon's master's thesis)")
+                    .append(o.cite(Citation.KASSING_DISS))
                     .append(".");
             } else if (!this.duplicating) {
                 res.append("A non-duplicating PQTRS (R,Q) is SAST iff ADP(R) is SAST (Chain-Criterion)").append(" (!PROTOTYPE!) ").append(".");

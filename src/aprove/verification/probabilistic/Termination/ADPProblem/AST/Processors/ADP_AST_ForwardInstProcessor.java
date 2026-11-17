@@ -9,10 +9,12 @@ import aprove.*;
 import aprove.strategies.Abortions.*;
 import aprove.strategies.Annotations.*;
 import aprove.verification.dpframework.BasicStructures.*;
+import aprove.verification.oldframework.BasicStructures.*;
 import aprove.verification.oldframework.Logic.*;
 import aprove.verification.oldframework.Utility.GenericStructures.*;
 import aprove.verification.oldframework.Utility.Graph.*;
 import aprove.verification.probabilistic.BasicStructures.*;
+import aprove.verification.probabilistic.Termination.ADPProblem.*;
 import aprove.verification.probabilistic.Termination.ADPProblem.AST.*;
 import aprove.verification.probabilistic.Termination.ADPProblem.AST.Processors.ADP_AST_InstProcessor.*;
 
@@ -75,7 +77,10 @@ public class ADP_AST_ForwardInstProcessor extends ADP_AST_TransformationProcesso
         for (final Node<ProbabilisticRule> u_to_v : gr.getOut(origNode)) {
 
             final Set<TRSSubstitution> allMGUs;
-            if (this.initialADPs) { /**BASIC**/
+            if (!posQDT.isInnermost()) { /**FULL and BASIC (non-innermost)**/
+                // for full rewriting we have to use Cap^{Sigma_D}_{np(A)^-1} instead of Cap_{np(A)^-1}
+                allMGUs = getFullConnectingSubstitutions(origNode.getObject(), u_to_v.getObject(), posQDT);
+            } else if (this.initialADPs) { /**BASIC**/
                 allMGUs = posQDT.getReachDependencyGraph()
                     .getConnectingStarSubstitutions(origNode, u_to_v);
             } else { /**ALL**/
@@ -133,7 +138,50 @@ public class ADP_AST_ForwardInstProcessor extends ADP_AST_TransformationProcesso
 
         final AST_TransformationHeuristic heuristic = new InstantiationVariableHeuristic(ellSharp, newDTs);
 
-        return new Quintuple<>(heuristic, YNMImplication.EQUIVALENT, resDTs, resRules, null);
+        // complete for iAST, but for AST only if the instantiated ADP is linear
+        final boolean complete = !posQDT.isBasic()
+            && (posQDT.isInnermost() || origNode.getObject().isLinear());
+        return new Quintuple<>(heuristic,
+            complete ? YNMImplication.EQUIVALENT : YNMImplication.SOUND,
+            resDTs,
+            resRules,
+            null);
+    }
+
+    /**
+     * computes all mgu(t#, Cap^{Sigma_D}_{np(A)^-1}(l'#)) for the annotated subterms t# of the right-hand sides of
+     * s_to_t, where l'# is the left-hand side of u_to_v (variables of the capped term are renamed apart)
+     */
+    private static Set<TRSSubstitution> getFullConnectingSubstitutions(final ProbabilisticRule s_to_t,
+        final ProbabilisticRule u_to_v,
+        final ADP_AST_Problem posQDT) {
+        // all rules that may be used (for basic problems also the rules reachable from the basic start terms)
+        final Set<ProbabilisticRule> rules = new LinkedHashSet<>(posQDT.getSwithQ().getPR());
+        if (posQDT.isBasic() && posQDT.getReachPQTRS() != null) {
+            rules.addAll(posQDT.getReachPQTRS().getPR());
+        }
+        final Set<FunctionSymbol> defined = new LinkedHashSet<>();
+        for (final ProbabilisticRule adp : posQDT.getP()) {
+            final FunctionSymbol f = adp.getLeft().getRootSymbol();
+            defined.add(posQDT.getDeAnnoMap().getOrDefault(f, f));
+        }
+        for (final ProbabilisticRule rule : rules) {
+            defined.add(rule.getLeft().getRootSymbol());
+        }
+        final TRSTerm cap_u = ProbQUsableRules.computeCapRminusOneDefined(u_to_v.getLhsInStandardRepresentation(),
+            ProbabilisticRule.getReversedRuleMap(rules),
+            defined);
+
+        final Set<TRSSubstitution> allSubs = new LinkedHashSet<>();
+        for (final TRSTerm rhsTerm : s_to_t.getRhsInStandardRepresentation().getSupport()) {
+            for (final TRSFunctionApplication term : rhsTerm.getAnnoSubterms(posQDT.getDeAnnoMap())) {
+                final TRSSubstitution sigma = term.getMGU(cap_u);
+                if (sigma != null) {
+                    allSubs.add(sigma);
+                }
+            }
+        }
+        return allSubs;
     }
 
 }

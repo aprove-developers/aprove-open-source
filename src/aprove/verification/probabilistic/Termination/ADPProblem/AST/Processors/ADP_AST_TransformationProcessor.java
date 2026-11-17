@@ -46,7 +46,9 @@ public abstract class ADP_AST_TransformationProcessor extends ADP_AST_ProblemPro
     @Override
     public boolean isAST_ADPApplicable(final ADP_AST_Problem posQDT) {
         if (posQDT.isBasic()) { /**BASIC**/
-            return posQDT.getDependencyGraph().isSCC();
+            // not for bAST: the transformations also replace the ADP in the reachability component,
+            // which loses the steps from basic start terms (and from predecessors/successors outside of P)
+            return false;
         } /**FULL and INNERMOST**/
         return posQDT.getDependencyGraph().isSCC() && !this.initialADPs;
     }

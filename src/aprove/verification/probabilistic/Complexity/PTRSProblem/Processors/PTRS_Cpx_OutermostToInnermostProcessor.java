@@ -56,7 +56,7 @@ public class PTRS_Cpx_OutermostToInnermostProcessor extends PTRS_Cpx_Processor {
         @Override
         public String export(final Export_Util o, final VerbosityLevel level) {
             final StringBuilder sb = new StringBuilder();
-            sb.append("We transform the outermost complexity problem into an innermost complexity problem [Kassing, Diss.]. ")
+            sb.append("We transform the outermost complexity problem into an innermost complexity problem. ")
                 .append("Each outermost rewrite step of P is simulated by one or more innermost steps of the transformed PTRS Trans_o(P), ")
                 .append("so an upper bound on the innermost complexity of Trans_o(P) is a sound upper bound on the outermost complexity of P. ")
                 .append("The transformed PTRS Trans_o(P) has the following rules:")

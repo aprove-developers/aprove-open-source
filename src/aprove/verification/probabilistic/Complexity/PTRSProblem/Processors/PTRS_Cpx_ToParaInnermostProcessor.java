@@ -17,7 +17,8 @@ import aprove.verification.probabilistic.Complexity.PTRSProblem.*;
 import immutables.*;
 
 /**
- * @author J-C Kassing & Florian Frohn
+ * PROTOTYPE! USE WITH CAUTION!
+ * @author J-C Kassing
  * @version $Id$
  */
 public class PTRS_Cpx_ToParaInnermostProcessor extends PTRS_Cpx_Processor {

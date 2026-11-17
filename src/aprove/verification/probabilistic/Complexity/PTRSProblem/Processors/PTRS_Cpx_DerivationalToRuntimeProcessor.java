@@ -227,7 +227,8 @@ public class PTRS_Cpx_DerivationalToRuntimeProcessor extends PTRS_Cpx_Processor 
         @Override
         public String export(final Export_Util o, final VerbosityLevel level) {
             final StringBuilder result = new StringBuilder();
-            result.append("The following rules have been added to R to convert the given derivational complexity problem to a runtime complexity problem:");
+            result.append("The following rules have been added to R to convert the given derivational complexity problem to a runtime complexity problem "
+                + o.cite(Citation.KASSING_DISS) + ":");
             result.append(o.cond_linebreak());
             result.append(o.set(this.newRules, Export_Util.RULES));
             result.append(o.cond_linebreak());

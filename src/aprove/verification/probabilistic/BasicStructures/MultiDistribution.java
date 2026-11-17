@@ -53,7 +53,7 @@ public class MultiDistribution<T> implements
             final BigFraction prob = entry.getKey().getValue();
             final Integer amount = entry.getValue();
             if (prob.compareTo(BigFraction.ZERO) > 0) {
-                this.supportToProbability.put(elem, prob.multiply(amount));
+                this.supportToProbability.merge(elem, prob.multiply(amount), BigFraction::add);
             }
         }
     }
@@ -246,11 +246,15 @@ public class MultiDistribution<T> implements
         }
 
         public void add(final T element, final Integer p) {
-            this.inputMapInt.add(new Pair<>(element, p));
+            if (p != 0) {
+                this.inputMapInt.add(new Pair<>(element, p));
+            }
         }
 
         public void add(final T element, final BigFraction p) {
-            this.inputMapFrac.add(new Pair<>(element, p));
+            if (p.compareTo(BigFraction.ZERO) != 0) {
+                this.inputMapFrac.add(new Pair<>(element, p));
+            }
         }
 
         public MultiDistribution<T> build() {

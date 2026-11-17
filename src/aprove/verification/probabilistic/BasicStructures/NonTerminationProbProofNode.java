@@ -279,6 +279,18 @@ public class NonTerminationProbProofNode extends TreeNode<ProofNodeContent> {
         return maxAllCount.compareTo(maxOrthoCount) > 0;
     }
 
+    /**
+     * @return whether s contains an instance of t, i.e., s = C[t sigma] for some context C and substitution sigma
+     */
+    public static boolean containsInstanceOf(final TRSTerm s, final TRSTerm t) {
+        for (final TRSTerm sub : s.getSubTerms()) {
+            if (t.getMatcher(sub) != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Override
     public boolean isLeaf() {
         return this.rewriteOptions.isEmpty();

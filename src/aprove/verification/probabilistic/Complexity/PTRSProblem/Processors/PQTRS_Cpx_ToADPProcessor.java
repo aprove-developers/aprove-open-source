@@ -87,7 +87,7 @@ public class PQTRS_Cpx_ToADPProcessor extends Processor.ProcessorSkeleton {
 
             res.append(o.paragraph());
             res.append("The complexity of a PQTRS (R,Q) is equivalent to the complexity of the ADP Problem A(R) (Chain-Criterion) ")
-                .append("(Leon's master's thesis)")
+                .append(o.cite(Citation.KASSING_DISS))
                 .append(".");
             res.append(o.linebreak());
             res.append("The ADPs are:");

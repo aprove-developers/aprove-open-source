@@ -94,7 +94,7 @@ public class PTRS_AST_DirectMatroProcessor extends PTRS_AST_ProblemProcessor {
             final Set<ProbabilisticRule> removedRules = new HashSet<>();
 
             for (final ProbabilisticRule rule : toOrderRules) {
-                if (checkStrictDecrease(rule, order, aborter)) {
+                if (checkStrictDecrease(rule, order, eSet, aborter)) {
                     removedRules.add(rule);
                 }
             }
@@ -350,7 +350,7 @@ public class PTRS_AST_DirectMatroProcessor extends PTRS_AST_ProblemProcessor {
      * @param aborter - Aborter to check the timer
      * @return true, if the rule together with the polynomial interpretation stored in order satisfies the "strictly decreasing" formula
      */
-    private boolean checkStrictDecrease(final ProbabilisticRule rule, final MATRO order, final Abortion aborter) {
+    private boolean checkStrictDecrease(final ProbabilisticRule rule, final MATRO order, final Set<Integer> eCols, final Abortion aborter) {
         final Matrix lhsTermMat = (order.getInterpretation().interpretTerm(rule.getLeft()));
 
         for (final Entry<Pair<TRSTerm, BigFraction>, Integer> entry : rule.getRight().getProbabilityMapping().entrySet()) {
@@ -359,10 +359,14 @@ public class PTRS_AST_DirectMatroProcessor extends PTRS_AST_ProblemProcessor {
             //Make sure that that the rhs is strictly smaller
             final Matrix termMat = order.getInterpretation().interpretTerm(term);
 
-            // At least one Entry is strictly greater
+            // At least one Entry in E is strictly greater
             boolean oneStrict = false;
-            for (final VarPolynomial termConstraintMat : lhsTermMat.minus(termMat).getCompleteList()) {
-                final VarPolyConstraint termConstraint = new VarPolyConstraint(termConstraintMat, ConstraintType.GT);
+            final List<VarPolynomial> diffs = lhsTermMat.minus(termMat).getCompleteList();
+            for (int i = 0; i < diffs.size(); i++) {
+                if (!eCols.contains(i)) {
+                    continue;
+                }
+                final VarPolyConstraint termConstraint = new VarPolyConstraint(diffs.get(i), ConstraintType.GT);
                 if (termConstraint.isValid()) {
                     oneStrict = true;
                     break;
@@ -413,7 +417,7 @@ public class PTRS_AST_DirectMatroProcessor extends PTRS_AST_ProblemProcessor {
             result = new StringBuilder();
             result.append(o.paragraph());
             result.append(
-                "We use the direct application of matrix interpretations " + o.cite(Citation.CADE23) + " with E chosen as " + this.eSet.toString() + ".");
+                "We use the direct application of matrix interpretations " + o.cite(Citation.KASSING_DISS) + " with E chosen as " + this.eSet.toString() + ".");
 
             result.append(o.linebreak());
             for (int i = 0; i < this.orderList.size(); i++) {
@@ -439,7 +443,7 @@ public class PTRS_AST_DirectMatroProcessor extends PTRS_AST_ProblemProcessor {
     public static class Arguments {
 
         public SolverFactory order;
-        public boolean allstrict = false;
+        public boolean allstrict = true;
     }
 
 }

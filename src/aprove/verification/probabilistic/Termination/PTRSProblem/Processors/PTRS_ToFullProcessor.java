@@ -99,7 +99,7 @@ public class PTRS_ToFullProcessor extends PTRS_ProblemProcessor {
         public String export(final Export_Util o, final VerbosityLevel level) {
             final String from = this.R.getRewriteStrategy() == RewriteStrategy.OUTERMOST ? "outermost" : "innermost";
             final StringBuilder proof = new StringBuilder();
-            proof.append(o.export("Switched from " + from + " to full (non-innermost) rewriting" + o.cite(Citation.FoSSaCS24) + "."));
+            proof.append(o.export("Switched from " + from + " to full (non-innermost) rewriting " + o.cite(Citation.KASSING_DISS) + "."));
             proof.append(o.paragraph());
             proof.append(o.escape("The system is non-overlapping, left-linear, "));
             if (this.onlyNDProof) {

@@ -40,9 +40,9 @@ public class ADP_AST_ProbabilityRemovalProcessor extends ADP_AST_ProblemProcesso
 
         origPqdp.getP();
         final Set<Rule> depPairs = origPqdp.getNonProbDPs();
-        final QDPProblem newqdp = QDPProblem.create(ImmutableCreator.create(depPairs), newQtrs, true);
+        final QDPProblem newqdp = QDPProblem.create(ImmutableCreator.create(depPairs), newQtrs, false);
 
-        final AST_ADPProbabilityRemovalProof NPPproof = new AST_ADPProbabilityRemovalProof(origPqdp.isInnermost());
+        final AST_ADPProbabilityRemovalProof NPPproof = new AST_ADPProbabilityRemovalProof(origPqdp.isInnermost(), origPqdp.isBasic());
 
         if (origPqdp.isBasic()) { /**BASIC**/
             return ResultFactory.proved(newqdp, YNMImplication.SOUND, NPPproof);
@@ -58,19 +58,21 @@ public class ADP_AST_ProbabilityRemovalProcessor extends ADP_AST_ProblemProcesso
     private static class AST_ADPProbabilityRemovalProof extends ADP_AST_Proof {
 
         private final boolean innermost;
+        private final boolean basic;
 
-        private AST_ADPProbabilityRemovalProof(final boolean innermost) {
+        private AST_ADPProbabilityRemovalProof(final boolean innermost, final boolean basic) {
             this.innermost = innermost;
+            this.basic = basic;
         }
 
         @Override
         public String export(final Export_Util o, final VerbosityLevel level) {
             final StringBuilder res = new StringBuilder();
             res.append(o.paragraph());
-            if (this.innermost) {
-                res.append("We use the probability removal processor ").append(o.cite(Citation.FLOPS24)).append(".");
-            } else { //full AST
-                res.append("We use the probability removal processor ").append(" (!PROTOTYPE!) ").append(".");
+            if (!this.basic) { //innermost and full AST
+                res.append("We use the probability removal processor ").append(o.cite(Citation.KASSING_DISS)).append(".");
+            } else { //basic AST
+                res.append("We use the probability removal processor ").append(o.cite(Citation.JPK60)).append(".");
             }
             res.append(o.linebreak());
             res.append("As all rules have a trivial probability (1:r), we can transform it into a non-probabilistic DP problem");

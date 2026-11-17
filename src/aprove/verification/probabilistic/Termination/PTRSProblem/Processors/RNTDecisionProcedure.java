@@ -752,7 +752,7 @@ public final class RNTDecisionProcedure {
             final StringBuilder s = new StringBuilder();
             s.append(o.export("The PTRS is in RNT (right-ground, non-overlapping, tail-recursive), so we decide AST via a stochastic "
                 + "context-free grammar (SCFG) "
-                + o.cite(new Citation[] { Citation.EY09, Citation.EGK13 })
+                + o.cite(Citation.KASSING_DISS)
                 + "."));
             if (!this.ground) {
                 s.append(o.export(" We instantiate the rules with ilhs(P) = "));

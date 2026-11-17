@@ -89,13 +89,13 @@ public class ADP_SAST_UsableRulesProcessor extends ADP_SAST_ProblemProcessor {
             final StringBuilder res = new StringBuilder();
             res.append(o.paragraph());
             if (this.origQDP.getInnermost()) {
-                res.append("We use the usable rules processor ").append("(Leon's master's thesis)").append(".");
+                res.append("We use the usable rules processor ").append(o.cite(Citation.KASSING_DISS)).append(".");
             } else { //full SAST
                 res.append("We use the usable rules processor for basic start terms ").append(" (!PROTOTYPE!) ").append(".");
             }
             res.append(o.linebreak())
                 .append("Hence, by the usable rules processor ")
-                .append(o.cite(Citation.FLOPS24))
+                .append(o.cite(this.origQDP.getInnermost() ? Citation.KASSING_DISS : Citation.FLOPS24))
                 .append(" we can deactivate the flags for all non-usable rules ")
                 .append(o.cite(Citation.FROCOS05))
                 .append(o.linebreak());
