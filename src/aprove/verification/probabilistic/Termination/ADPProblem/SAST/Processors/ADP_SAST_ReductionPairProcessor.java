@@ -17,6 +17,7 @@ import aprove.verification.dpframework.Orders.*;
 import aprove.verification.dpframework.Orders.Solvers.*;
 import aprove.verification.dpframework.Orders.Utility.POLO.*;
 import aprove.verification.oldframework.Algebra.Polynomials.*;
+import aprove.verification.oldframework.BasicStructures.FunctionSymbol;
 import aprove.verification.oldframework.Logic.*;
 import aprove.verification.oldframework.PropositionalLogic.*;
 import aprove.verification.oldframework.PropositionalLogic.Formulae.*;
@@ -139,6 +140,21 @@ public class ADP_SAST_ReductionPairProcessor extends ADP_SAST_ProblemProcessor {
     }
 
     /**
+     * The constraints also interpret the de-annotated versions of the annotated symbols. Such a symbol does not
+     * occur in the problem anymore if all of its rules and all of its unannotated occurrences have been removed.
+     */
+    private static Set<FunctionSymbol> getSignatureWithDeAnnoSymbols(final ADP_SAST_Problem sast_ADPProblem) {
+        final Set<FunctionSymbol> signature = new LinkedHashSet<>(sast_ADPProblem.getSignature());
+        for (final FunctionSymbol f : sast_ADPProblem.getSignature()) {
+            final FunctionSymbol deAnno = sast_ADPProblem.getDeAnnoMap().get(f);
+            if (deAnno != null) {
+                signature.add(deAnno);
+            }
+        }
+        return signature;
+    }
+
+    /**
      * The SMT-Solving part of the processor.
      * This includes the creation of an interpretation, the formula about diophantine constraints
      * and the search for a satisfying interpretation via some solver.
@@ -152,7 +168,7 @@ public class ADP_SAST_ReductionPairProcessor extends ADP_SAST_ProblemProcessor {
     private POLO findOrdering(final ADP_SAST_Problem sast_ADPProblem, final boolean allstrict, final Abortion aborter)
         throws AbortionException {
 
-        final POLOSolver solver = this.order.getMLPOLOSolver(sast_ADPProblem.getSignature(), aborter);
+        final POLOSolver solver = this.order.getMLPOLOSolver(getSignatureWithDeAnnoSymbols(sast_ADPProblem), aborter);
         solver.setAllowWeakMonotonicity(true);
 
         final Formula<Diophantine> fml = createFormula(sast_ADPProblem, solver.getInterpretation(), aborter);
