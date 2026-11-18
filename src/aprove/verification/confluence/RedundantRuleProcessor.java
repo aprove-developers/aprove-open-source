@@ -49,7 +49,7 @@ public class RedundantRuleProcessor implements Processor {
 
     private ConfTRSProblem removeRedundantRules(ConfTRSProblem confTRSProblem, Abortion aborter) {
         Set<Rule> rules = new LinkedHashSet<>(confTRSProblem.getRules());
-        var ruleMap = new IncrementalRuleMap(rules);
+        var ruleMap = new RuleMap(rules);
 
         // (js)
         var criticalPairs = confTRSProblem.getCriticalPairs();
@@ -69,7 +69,7 @@ public class RedundantRuleProcessor implements Processor {
         // (rhs)
         Set<Rule> rhsRules = rules.stream()
                 .flatMap(r -> r.getRight()
-                        .rewrite(ruleMap.getRuleMap())
+                        .rewrite(ruleMap.ruleMap())
                         .stream()
                         .filter(rewrite -> !r.getLeft().equals(rewrite))
                         .map(rewrite -> Rule.create(r.getLeft(), rewrite)))
@@ -80,7 +80,7 @@ public class RedundantRuleProcessor implements Processor {
         rules.removeIf(rule -> {
             var newRules = new LinkedHashSet<>(rules);
             newRules.remove(rule);
-            return canRuleBeSimulated(new IncrementalRuleMap(newRules).getRuleMap(), rule);
+            return canRuleBeSimulated(new RuleMap(newRules).ruleMap(), rule);
         });
 
         // (del) A rule l -> r is redundant and may be removed only if l can still reach r in the
@@ -88,7 +88,7 @@ public class RedundantRuleProcessor implements Processor {
         rules.removeIf(rule -> {
             var newRules = new LinkedHashSet<>(rules);
             newRules.remove(rule);
-            var joinTree = new TrsTermJoinTree(new IncrementalRuleMap(newRules).getRuleMap(), rule.getLeft(), rule.getRight());
+            var joinTree = new TrsTermJoinTree(new RuleMap(newRules).ruleMap(), rule.getLeft(), rule.getRight());
             var result = joinTree.areTermsJoinable(0, arguments.DelWeakCRJoinLimit, CriticalPairs.SearchMode.EXIT_ON_FIRST_JOIN, aborter);
             return result instanceof JoinableResult.Joinable;
         });

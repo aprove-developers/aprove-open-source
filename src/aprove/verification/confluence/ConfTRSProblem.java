@@ -539,7 +539,7 @@ public class ConfTRSProblem extends DefaultBasicObligation
                     .filter(Objects::nonNull)
                     .flatMap(Set::stream)
                     .collect(Collectors.toCollection(LinkedHashSet<Rule>::new));
-            if(!rules.isEmpty()) {
+            if (!rules.isEmpty()) {
                 result.add(ImmutableCreator.create(rules));
             }
         }
@@ -547,9 +547,9 @@ public class ConfTRSProblem extends DefaultBasicObligation
     }
 
     private void calculateDefSymbolsAndRuleMap() {
-        var incrementalRuleMap = new IncrementalRuleMap(rules);
-        this.ruleMap = incrementalRuleMap.toImmutable();
-        this.defSymbolsOfR = ImmutableCreator.create(incrementalRuleMap.getDefinedSymbols());
+        var map = new RuleMap(rules);
+        this.ruleMap = map.ruleMap();
+        this.defSymbolsOfR = map.getDefinedSymbols();
     }
 
     /**

@@ -4,48 +4,52 @@ import aprove.strategies.Abortions.Abortion;
 import aprove.verification.confluence.Utility.CriticalPairInfo;
 import aprove.verification.dpframework.BasicStructures.*;
 import aprove.verification.oldframework.BasicStructures.FunctionSymbol;
-import aprove.verification.oldframework.Utility.FreshNameGenerator;
-import aprove.verification.oldframework.Utility.GenericStructures.BiTreeNode;
 import aprove.verification.oldframework.Utility.GenericStructures.Wrapper;
 import immutables.ImmutableCreator;
 import immutables.ImmutableList;
 
 import java.util.*;
 
+/**
+ * Dynamically builds up two trees breadth-first and tests for a common reduct for two given terms.
+ */
 public class TrsTermJoinTree {
     private final Map<FunctionSymbol, ? extends Set<Rule>> rules;
     private final CriticalPairInfo cpInfo;
     private final TRSTerm s;
     private final TRSTerm t;
     private final Map<TRSTerm, ImmutableList<RewriteStep>> normalFormCache;
-    private final HashMap<TRSTerm, BiTreeNode<RewriteStep>> sLazySubstitutions = new HashMap<>();
-    private final HashMap<TRSTerm, BiTreeNode<RewriteStep>> tLazySubstitutions = new HashMap<>();
-    private final FreshNameGenerator freshNames = new FreshNameGenerator(FreshNameGenerator.VARIABLES);
-    private Set<BiTreeNode<RewriteStep>> sLastLayer = new LinkedHashSet<>();
-    private Set<BiTreeNode<RewriteStep>> tLastLayer = new LinkedHashSet<>();
+    private final HashMap<TRSTerm, PathNode> sReached = new HashMap<>();
+    private final HashMap<TRSTerm, PathNode> tReached = new HashMap<>();
+    private List<PathNode> sLastLayer = new ArrayList<>();
+    private List<PathNode> tLastLayer = new ArrayList<>();
     private final Wrapper<ImmutableList<RewriteStep>> sNormalForm = new Wrapper<>(null);
     private final Wrapper<ImmutableList<RewriteStep>> tNormalForm = new Wrapper<>(null);
 
+    private record PathNode(RewriteStep step, PathNode parent) {
+        TRSTerm substitutedTerm() {
+            return step.substitutedTerm();
+        }
+    }
+
     public TrsTermJoinTree(Map<FunctionSymbol, ? extends Set<Rule>> rules, CriticalPairInfo cpInfo, Map<TRSTerm, ImmutableList<RewriteStep>> normalFormCache) {
-        this(rules, cpInfo.s(), cpInfo.t(), new BiTreeNode<>(new RewriteStep(cpInfo.divergence(), Position.EPSILON, cpInfo.sRule(), cpInfo.s())), new BiTreeNode<>(new RewriteStep(cpInfo.divergence(), Position.EPSILON, cpInfo.tRule(), cpInfo.t())), normalFormCache, cpInfo);
+        this(rules, cpInfo.s(), cpInfo.t(), new PathNode(new RewriteStep(cpInfo.divergence(), Position.EPSILON, cpInfo.sRule(), cpInfo.s()), null), new PathNode(new RewriteStep(cpInfo.divergence(), Position.EPSILON, cpInfo.tRule(), cpInfo.t()), null), normalFormCache, cpInfo);
     }
 
     public TrsTermJoinTree(Map<FunctionSymbol, ? extends Set<Rule>> rules, TRSTerm s, TRSTerm t) {
-        this(rules, s, t, new BiTreeNode<>(new RewriteStep(null, null, null, s)), new BiTreeNode<>(new RewriteStep(null, null, null, t)), new HashMap<>(), null);
+        this(rules, s, t, new PathNode(new RewriteStep(null, null, null, s), null), new PathNode(new RewriteStep(null, null, null, t), null), new HashMap<>(), null);
     }
 
-    private TrsTermJoinTree(Map<FunctionSymbol, ? extends Set<Rule>> rules, TRSTerm s, TRSTerm t, BiTreeNode<RewriteStep> sTree, BiTreeNode<RewriteStep> tTree, Map<TRSTerm, ImmutableList<RewriteStep>> normalFormCache, CriticalPairInfo cpInfo) {
+    private TrsTermJoinTree(Map<FunctionSymbol, ? extends Set<Rule>> rules, TRSTerm s, TRSTerm t, PathNode sRoot, PathNode tRoot, Map<TRSTerm, ImmutableList<RewriteStep>> normalFormCache, CriticalPairInfo cpInfo) {
         this.rules = rules;
         this.cpInfo = cpInfo;
         this.s = s;
         this.t = t;
         this.normalFormCache = normalFormCache;
-        this.sLastLayer.add(sTree);
-        this.tLastLayer.add(tTree);
-        this.sLazySubstitutions.put(s, sTree);
-        this.tLazySubstitutions.put(t, tTree);
-        freshNames.lockNames(CollectionUtils.getNames(s.getVariables()));
-        freshNames.lockNames(CollectionUtils.getNames(t.getVariables()));
+        this.sLastLayer.add(sRoot);
+        this.tLastLayer.add(tRoot);
+        this.sReached.put(s, sRoot);
+        this.tReached.put(t, tRoot);
     }
 
     JoinableResult areTermsJoinable(int start, int limit, CriticalPairs.SearchMode searchMode, Abortion aborter) {
@@ -64,13 +68,13 @@ public class TrsTermJoinTree {
 
         // TODO: actually implement start argument
         for (int i = 0; i < limit; i++) {
-            var sResult = buildTreeLayer(s, sLastLayer, sLazySubstitutions, tLazySubstitutions, sNormalForm, searchMode, aborter);
-            if (!(sResult instanceof NewLayer(Set<BiTreeNode<RewriteStep>> sNewLayer)))
+            var sResult = buildTreeLayer(s, sLastLayer, sReached, tReached, sNormalForm, searchMode, aborter);
+            if (!(sResult instanceof NewLayer(List<PathNode> sNewLayer)))
                 return sResult;
             sLastLayer = sNewLayer;
 
-            var tResult = buildTreeLayer(t, tLastLayer, tLazySubstitutions, sLazySubstitutions, tNormalForm, searchMode, aborter);
-            if (!(tResult instanceof NewLayer(Set<BiTreeNode<RewriteStep>> tNewLayer)))
+            var tResult = buildTreeLayer(t, tLastLayer, tReached, sReached, tNormalForm, searchMode, aborter);
+            if (!(tResult instanceof NewLayer(List<PathNode> tNewLayer)))
                 return tResult;
             tLastLayer = tNewLayer;
 
@@ -82,65 +86,68 @@ public class TrsTermJoinTree {
         return new JoinableResult.Maybe();
     }
 
-    record NewLayer(Set<BiTreeNode<RewriteStep>> newLayer) implements JoinableResult {}
+    record NewLayer(List<PathNode> newLayer) implements JoinableResult {}
 
     private JoinableResult buildTreeLayer(
             TRSTerm root,
-            Set<BiTreeNode<RewriteStep>> lastLayer,
-            HashMap<TRSTerm, BiTreeNode<RewriteStep>> lazyFoundOwnSubstitutions,
-            HashMap<TRSTerm, BiTreeNode<RewriteStep>> lazyFoundOtherSubstitutions,
+            List<PathNode> lastLayer,
+            HashMap<TRSTerm, PathNode> ownReached,
+            HashMap<TRSTerm, PathNode> otherReached,
             Wrapper<ImmutableList<RewriteStep>> foundNormalForm,
             CriticalPairs.SearchMode searchMode,
             Abortion aborter) {
 
-        Set<BiTreeNode<RewriteStep>> newLayer = new LinkedHashSet<>();
-        for (BiTreeNode<RewriteStep> lastLayerNode : lastLayer) {
+        List<PathNode> newLayer = new ArrayList<>();
+        for (PathNode node : lastLayer) {
             aborter.checkAbortion();
-            var possibleRewrites = lastLayerNode.getValue().substitutedTerm().computePossibleRewrites(rules);
+            var possibleRewrites = node.substitutedTerm().computePossibleRewrites(rules);
 
-            // No further rewrites possible, we found a normal formal
-            if (possibleRewrites.isEmpty()){
-                ImmutableList<RewriteStep> sequence = buildRewriteSequence(lastLayerNode);
-                if (normalFormCache != null)
-                    normalFormCache.putIfAbsent(root, sequence);
-
+            // No further rewrites possible, we found a normal form
+            if (possibleRewrites.isEmpty()) {
                 // Check if we previously found a normal form.
                 // If so, the TRS cannot be confluent
                 if (foundNormalForm.x == null) {
-                    foundNormalForm.x = sequence;
-                } else if (!foundNormalForm.x.getLast().substitutedTerm().equals(lastLayerNode.getValue().substitutedTerm())) {
-                    return new JoinableResult.WcrCounterExample.NonConfluent(foundNormalForm.x, sequence);
+                    foundNormalForm.x = buildRewriteSequence(node);
+                    if (normalFormCache != null)
+                        normalFormCache.putIfAbsent(root, foundNormalForm.x);
+                } else if (!foundNormalForm.x.getLast().substitutedTerm().equals(node.substitutedTerm())) {
+                    return new JoinableResult.WcrCounterExample.NonConfluent(foundNormalForm.x, buildRewriteSequence(node));
                 }
+                continue;
             }
 
-            // Otherwise, brute force all possible rewrite steps and add them to the tree
+            // Otherwise, expand every successor term that has not been reached before.
+            // Since the search is breadth-first, the first path to a term is also a shortest one,
+            // so terms reached again need not be expanded a second time.
             for (final RewriteStep rewriteStep : possibleRewrites) {
-                BiTreeNode<RewriteStep> stepNode = new BiTreeNode<>(rewriteStep);
-                lastLayerNode.addChild(stepNode);
+                TRSTerm term = rewriteStep.substitutedTerm();
+                if (ownReached.containsKey(term))
+                    continue;
+
+                PathNode stepNode = new PathNode(rewriteStep, node);
+                PathNode otherNode = otherReached.get(term);
+                if (otherNode != null)
+                    return new JoinableResult.Joinable(buildRewriteSequence(otherNode), buildRewriteSequence(stepNode));
+
+                ownReached.put(term, stepNode);
                 newLayer.add(stepNode);
-                if (!lazyFoundOwnSubstitutions.containsKey(rewriteStep.substitutedTerm())) {
-                    if (lazyFoundOtherSubstitutions.containsKey(rewriteStep.substitutedTerm()))
-                        return new JoinableResult.Joinable(buildRewriteSequence(lazyFoundOtherSubstitutions.get(rewriteStep.substitutedTerm())), buildRewriteSequence(stepNode));
-                    lazyFoundOwnSubstitutions.put(rewriteStep.substitutedTerm(), stepNode);
-                }
             }
         }
 
         return new NewLayer(newLayer);
     }
 
-    private static ImmutableList<RewriteStep> buildRewriteSequence(BiTreeNode<RewriteStep> node) {
+    private static ImmutableList<RewriteStep> buildRewriteSequence(PathNode node) {
         assert node != null;
 
-        List<RewriteStep> sequence = new Stack<>();
-        BiTreeNode<RewriteStep> currentNode = node;
+        int length = 0;
+        for (PathNode current = node; current != null; current = current.parent())
+            length++;
 
-        while (currentNode != null) {
-            sequence.add(currentNode.getValue());
-            currentNode = currentNode.getParent();
-        }
+        RewriteStep[] sequence = new RewriteStep[length];
+        for (PathNode current = node; current != null; current = current.parent())
+            sequence[--length] = current.step();
 
-        Collections.reverse(sequence);
-        return ImmutableCreator.create(sequence);
+        return ImmutableCreator.create(Arrays.asList(sequence));
     }
 }
