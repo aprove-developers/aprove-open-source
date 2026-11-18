@@ -362,7 +362,7 @@ public class PolynomialInterpretationNonConfluenceProcessor implements Processor
             if (!(term instanceof TRSFunctionApplication))
                 return Collections.emptySet();
 
-            var rulesLhs = GeneralizedRule.computeLhsOfRulesAsMapInStandardRepresentation(new IncrementalRuleMap(rules).getRuleMap());
+            var rulesLhs = GeneralizedRule.computeLhsOfRulesAsMapInStandardRepresentation(new RuleMap(rules).ruleMap());
             Set<Rule> usableRules = new HashSet<>();
             Set<Rule> unusableRules = new HashSet<>(rules);
 

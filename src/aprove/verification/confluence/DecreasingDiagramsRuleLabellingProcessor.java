@@ -24,6 +24,10 @@ import aprove.verification.oldframework.Utility.GenericStructures.Pair;
 
 import java.util.*;
 
+/**
+ * Implementation of the decreasing diagrams technique by Vincent van Oostrom (10.1016/0304-3975(92)00023-K and 10.1007/978-3-540-70590-1_21).
+ * Extended to general left-linear TRS by Aoto using the presented SMT encoding (10.4230/LIPIcs.RTA.2010.7)
+ */
 public class DecreasingDiagramsRuleLabellingProcessor implements Processor {
     private final Arguments arguments;
 
