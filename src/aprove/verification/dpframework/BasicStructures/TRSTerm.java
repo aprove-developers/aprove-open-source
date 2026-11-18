@@ -1072,8 +1072,8 @@ public abstract class TRSTerm
         return rewritings;
     }
 
-    public Set<RewriteStep> computePossibleRewrites(Map<FunctionSymbol, ? extends Set<Rule>> rules) {
-        final Set<RewriteStep> rewritings = new LinkedHashSet<>();
+    public List<RewriteStep> computePossibleRewrites(Map<FunctionSymbol, ? extends Set<Rule>> rules) {
+        final List<RewriteStep> rewritings = new ArrayList<>();
         for (Pair<Position, TRSTerm> actPair : this.getPositionsWithSubTerms()) {
             final TRSTerm subterm = actPair.y;
             if (!(subterm instanceof TRSFunctionApplication fSubterm))
