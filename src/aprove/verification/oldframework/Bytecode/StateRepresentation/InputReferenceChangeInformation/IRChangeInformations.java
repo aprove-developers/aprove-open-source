@@ -320,7 +320,7 @@ public class IRChangeInformations implements Iterable<IrChangeInformation> {
                 if (arrayChanges != null) {
                     if (arrayChanges.equals(localArrayChanges)) {
                         arrayChanges = null;
-                        return arrayChanges;
+                        return localArrayChanges;
                     } else
                         throw new ConcurrentModificationException();
                 }
