@@ -117,11 +117,10 @@ listofthdecl[RawTrs rawtrs]
     : ('(' thdecl[rawtrs] ')')*
 ;
 
+// explicit equations are collected as they are; whether they form a supported
+// theory (only A, C, and AC equations so far) is checked by the ObligationCreator
 thdecl[RawTrs rawtrs]
-    : EQUATIONS eqlist[rawtrs] {
-        if (true)
-            throw new FailedPredicateException(input, "EQUATIONS", "Explicit EQUATIONS with == currently unsupported. Use named theories A, C, AC instead.");
-    }
+    : EQUATIONS eqlist[rawtrs]
     | id=IDENTIFIER ids=idlist {
         String theory = id.getText();
         if ("AC".equals(theory)) {
@@ -147,7 +146,9 @@ eqlist[RawTrs rawtrs]
 ;
 
 equation[RawTrs rawtrs]
-    : term[rawtrs] '==' term[rawtrs]
+    : lhs=term[rawtrs] '==' rhs=term[rawtrs] {
+        rawtrs.addEquation(lhs, rhs);
+    }
 ;
 
 listofrules[RawTrs rawtrs, boolean pairs]
