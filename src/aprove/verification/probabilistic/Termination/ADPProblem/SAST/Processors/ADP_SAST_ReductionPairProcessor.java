@@ -17,6 +17,7 @@ import aprove.verification.dpframework.Orders.*;
 import aprove.verification.dpframework.Orders.Solvers.*;
 import aprove.verification.dpframework.Orders.Utility.POLO.*;
 import aprove.verification.oldframework.Algebra.Polynomials.*;
+import aprove.verification.oldframework.BasicStructures.FunctionSymbol;
 import aprove.verification.oldframework.Logic.*;
 import aprove.verification.oldframework.PropositionalLogic.*;
 import aprove.verification.oldframework.PropositionalLogic.Formulae.*;
@@ -119,8 +120,8 @@ public class ADP_SAST_ReductionPairProcessor extends ADP_SAST_ProblemProcessor {
             }
         }
 
-        // No dependency tuple could be oriented strictly: the processor made no progress.
-        if (removedDepTuples.isEmpty()) {
+        // No dependency tuple of S could be oriented strictly: the processor made no progress.
+        if (newSadps.size() == oriqSast_ADP.getS().size()) {
             return ResultFactory.unsuccessful("Reduction pair oriented no dependency tuple strictly; no progress");
         }
 
@@ -139,6 +140,21 @@ public class ADP_SAST_ReductionPairProcessor extends ADP_SAST_ProblemProcessor {
     }
 
     /**
+     * The constraints also interpret the de-annotated versions of the annotated symbols. Such a symbol does not
+     * occur in the problem anymore if all of its rules and all of its unannotated occurrences have been removed.
+     */
+    private static Set<FunctionSymbol> getSignatureWithDeAnnoSymbols(final ADP_SAST_Problem sast_ADPProblem) {
+        final Set<FunctionSymbol> signature = new LinkedHashSet<>(sast_ADPProblem.getSignature());
+        for (final FunctionSymbol f : sast_ADPProblem.getSignature()) {
+            final FunctionSymbol deAnno = sast_ADPProblem.getDeAnnoMap().get(f);
+            if (deAnno != null) {
+                signature.add(deAnno);
+            }
+        }
+        return signature;
+    }
+
+    /**
      * The SMT-Solving part of the processor.
      * This includes the creation of an interpretation, the formula about diophantine constraints
      * and the search for a satisfying interpretation via some solver.
@@ -152,7 +168,7 @@ public class ADP_SAST_ReductionPairProcessor extends ADP_SAST_ProblemProcessor {
     private POLO findOrdering(final ADP_SAST_Problem sast_ADPProblem, final boolean allstrict, final Abortion aborter)
         throws AbortionException {
 
-        final POLOSolver solver = this.order.getMLPOLOSolver(sast_ADPProblem.getSignature(), aborter);
+        final POLOSolver solver = this.order.getMLPOLOSolver(getSignatureWithDeAnnoSymbols(sast_ADPProblem), aborter);
         solver.setAllowWeakMonotonicity(true);
 
         final Formula<Diophantine> fml = createFormula(sast_ADPProblem, solver.getInterpretation(), aborter);
@@ -174,8 +190,9 @@ public class ADP_SAST_ReductionPairProcessor extends ADP_SAST_ProblemProcessor {
         final Interpretation interpretation,
         final Abortion aborter) {
 
-        final FormulaFactory<Diophantine> ff = NonCountingCircuitFactory.create(SplitMode.FLATTEN, SplitMode.LEFT_COMB); //TODO: Check these parameters
+        final FormulaFactory<Diophantine> ff = NonCountingCircuitFactory.create(SplitMode.FLATTEN, SplitMode.LEFT_COMB);
 
+        final Set<ProbabilisticRule> allDepTuples = sast_ADPProblem.getPwithOnlyAnno();
         final Set<ProbabilisticRule> depTuples = sast_ADPProblem.getSwithOnlyAnno();
         final Set<ProbabilisticRule> probRules = sast_ADPProblem.getSWithQ();
 
@@ -185,7 +202,7 @@ public class ADP_SAST_ReductionPairProcessor extends ADP_SAST_ProblemProcessor {
         for (final ProbabilisticRule probRule : probRules) {
             expectedValueConstraintList.add(createRuleFormulaExpectation(ff, probRule, interpretation, aborter));
         }
-        for (final ProbabilisticRule depTuple : depTuples) {
+        for (final ProbabilisticRule depTuple : allDepTuples) {
             expectedValueConstraintList.add(createDepTupleFormulaExpectation(ff, depTuple, interpretation, sast_ADPProblem, aborter));
         }
         final Formula<Diophantine> expectedValueConstraintFormula = ff.buildAnd(expectedValueConstraintList);
@@ -439,7 +456,7 @@ public class ADP_SAST_ReductionPairProcessor extends ADP_SAST_ProblemProcessor {
             result = new StringBuilder();
             result.append(o.paragraph());
             if (this.origPQDP.getInnermost()) {
-                result.append("We use the reduction pair processor " + "(Leon's master's thesis)" + ".");
+                result.append("We use the reduction pair processor " + o.cite(Citation.KASSING_DISS) + ".");
             } else { //full SAST
                 result.append("We use the reduction pair processor " + " (!PROTOTYPE!) " + ".");
             }

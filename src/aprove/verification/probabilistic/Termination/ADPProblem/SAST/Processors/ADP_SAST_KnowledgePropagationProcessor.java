@@ -71,7 +71,7 @@ public class ADP_SAST_KnowledgePropagationProcessor extends ADP_SAST_ProblemProc
             final StringBuilder res = new StringBuilder();
             res.append(o.paragraph());
             if (this.innermost) {
-                res.append("We use the knowledge propagation processor ").append("(Leon's master's thesis)").append(".");
+                res.append("We use the knowledge propagation processor ").append(o.cite(Citation.KASSING_DISS)).append(".");
             } else { //full SAST
                 res.append("We use the knowledge propagation processor ").append(" (!PROTOTYPE!) ").append(".");
             }

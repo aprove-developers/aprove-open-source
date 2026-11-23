@@ -134,11 +134,11 @@ public class PQTRS_AST_ToADPProblemProcessor extends Processor.ProcessorSkeleton
 
             res.append(o.paragraph());
             if (this.innermost) {
-                res.append("A PQTRS (R,Q) is innermost AST iff ADP(R) is innermost AST (Chain-Criterion)").append(o.cite(Citation.FLOPS24)).append(".");
+                res.append("A PQTRS (R,Q) is innermost AST iff ADP(R) is innermost AST (Chain-Criterion) ").append(o.cite(Citation.KASSING_DISS)).append(".");
             } else if (!this.duplicating) {
-                res.append("A non-duplicating PQTRS (R,Q) is AST iff ADP(R) is AST (Chain-Criterion)").append(" (!PROTOTYPE!) ").append(".");
+                res.append("A non-duplicating PQTRS (R,Q) is AST iff ADP(R) is AST (Chain-Criterion) ").append(o.cite(Citation.KASSING_DISS)).append(".");
             } else { //needs to be spare then
-                res.append("A spare PQTRS (R,Q) is basic AST iff ADP(R) is basic AST (Chain-Criterion)").append(" (!PROTOTYPE!) ").append(".");
+                res.append("A spare PQTRS (R,Q) is basic AST iff ADP(R) is basic AST (Chain-Criterion) ").append(o.cite(Citation.JPK60)).append(".");
                 res.append(o.escape("Proof of spareness:"));
                 res.append(o.paragraph());
                 res.append(this.sparenessProof.export(o, level));

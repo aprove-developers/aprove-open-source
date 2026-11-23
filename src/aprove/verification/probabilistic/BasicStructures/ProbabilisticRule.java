@@ -114,6 +114,58 @@ public final class ProbabilisticRule extends GeneralizedProbabilisticRule
     }
 
     /**
+     * checks whether t is a basic term w.r.t. the given rules, i.e., the root of t is a defined symbol and all
+     * arguments of t are constructor terms.
+     * @param t
+     * @param rules
+     */
+    public static boolean isBasicTerm(final TRSTerm t, final Iterable<? extends ProbabilisticRule> rules) {
+        if (t.isVariable()) {
+            return false;
+        }
+        final Set<FunctionSymbol> defined = new HashSet<>();
+        for (final ProbabilisticRule rule : rules) {
+            defined.add(rule.getLeft().getRootSymbol());
+        }
+        final TRSFunctionApplication ft = (TRSFunctionApplication) t;
+        if (!defined.contains(ft.getRootSymbol())) {
+            return false;
+        }
+        for (final TRSTerm arg : ft.getArguments()) {
+            for (final FunctionSymbol g : arg.getFunctionSymbols()) {
+                if (defined.contains(g)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * checks whether some basic term reaches an instance of t (in a context) with positive probability in at most
+     * one step, i.e., t is basic or some rule with a basic left-hand side has a term in the support of its
+     * right-hand side that contains an instance of t. For full rewriting, non-AST (non-SAST) of t then implies
+     * non-AST (non-SAST) of this basic term.
+     * @param t
+     * @param rules
+     */
+    public static boolean isReachedFromBasicTerm(final TRSTerm t, final Collection<? extends ProbabilisticRule> rules) {
+        if (ProbabilisticRule.isBasicTerm(t, rules)) {
+            return true;
+        }
+        for (final ProbabilisticRule rule : rules) {
+            if (ProbabilisticRule.isBasicTerm(rule.getLeft(), rules)) {
+                for (final TRSTerm r : rule.getRight().getSupport()) {
+                    if (NonTerminationProbProofNode.containsInstanceOf(r, t)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
      * returns a map from defined symbols (of rhss) to corresponding reversed non-probabilistic rules. Collapsing rules
      * have null as "defined symbol".
      * @param rules

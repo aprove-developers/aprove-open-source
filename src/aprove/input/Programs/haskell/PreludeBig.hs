@@ -37,14 +37,11 @@ module Prelude (
 --  module Ratio,
     Ratio, Rational, (%), numerator, denominator, approxRational,
 --  Non-standard exports
-    IO(..), IOResult(..), primExitWith,
+    IO(..),
     FunPtr, Ptr, Addr,
     Word, StablePtr, ForeignObj, ForeignPtr,
     Int8, Int16, Int32, Int64,
     Word8, Word16, Word32, Word64,
-    basicIORun, blockIO, IOFinished(..),
-    threadToIOResult,
-    HugsException, catchHugsException, primThrowException,
 
     Bool(False, True),
     Maybe(Nothing, Just),
@@ -2137,117 +2134,9 @@ instance Monad IO where
 ---data ForeignPtr a -- builtin datatype of C pointers with finalizers
 ---data StablePtr a
 
--- unsafeCoerce "primUnsafeCoerce" :: a -> b
-
-data Obj = Obj
-
-toObj :: a -> Obj
-toObj   = toObj
-
-fromObj :: Obj -> a
-fromObj = fromObj
-
---newtype IO a = IO ((IOError -> IOResult) -> (a -> IOResult) -> IOResult)
-
-data IO a = IO ((IOError -> IOResult) -> (a -> IOResult) -> IOResult) | AProVE_IO a | AProVE_Exception AET | AProVE_Error String
+data IO a = AProVE_IO a | AProVE_Exception AET | AProVE_Error String
 
 data AET = AET_IOError IOError | AET_MatchFailure String | AET_ErrorCall String 
-
-data IOResult
-  = Hugs_ExitWith    Int
-  | Hugs_Error       IOError
-  | Hugs_Catch       IOResult (HugsException -> IOResult) (IOError -> IOResult) (Obj -> IOResult)
-  | Hugs_ForkThread  IOResult IOResult
-  | Hugs_DeadThread
-  | Hugs_YieldThread IOResult
-  | Hugs_Return      Obj
-  | Hugs_BlockThread (Obj -> IOResult) ((Obj -> IOResult) -> IOResult)
-
-data IOFinished a
-  = Finished_ExitWith Int
-  | Finished_Error    IOError
-  | Finished_Return   a
-
-data HugsException = HugsException 
-
-primCatchException :: a -> Either HugsException a
-primCatchException = primCatchException
-
-primThrowException :: HugsException -> a
-primThrowException = primThrowException
-
-primShowException  :: HugsException -> String
-primShowException = primShowException
-
-instance Show HugsException where showsPrec _ x r = primShowException x ++ r
-
-catchHugsException :: IO a -> (HugsException -> IO a) -> IO a
-catchHugsException (IO m) k = IO $ \ f s ->
-  Hugs_Catch (m Hugs_Error (Hugs_Return . toObj))
-             (\ e -> case (k e) of { IO k' -> k' f s })
-             f
-             (s . fromObj)
-
--- reify current thread, execute 'm <thread>' and switch to next thread
-blockIO :: ((a -> IOResult) -> IO ()) -> IO a
-blockIO m = IO (\ f s -> Hugs_BlockThread (s . fromObj) m')
- where
-  m' k = threadToIOResult (m (k . toObj))
-
-hugsIORun  :: IO a -> Either Int a
-hugsIORun m = 
-  case basicIORun (runAndShowError m) of
-    Finished_ExitWith i -> Left i
-    Finished_Error    _ -> Left 1
-    Finished_Return   a -> Right a
- where
-  runAndShowError :: IO a -> IO a
-  runAndShowError m =
-    m `catch` \err -> do 
-	putChar '\n'
-	putStr (show err)
-	primExitWith 1
-
-basicIORun :: IO a -> IOFinished a
-basicIORun (IO m) = loop [m Hugs_Error (Hugs_Return . toObj)]
-
-
-threadToIOResult :: IO a -> IOResult
-threadToIOResult (IO m) = m Hugs_Error (const Hugs_DeadThread)
-
--- This is the queue of *runnable* threads.
--- There may be blocked threads attached to MVars
--- An important invariant is that at most one thread will result in
--- Hugs_Return - and its Obj value has type \alpha
-loop :: [IOResult] -> IOFinished a
-loop []                      = error "" --"no more threads (deadlock?)"
-loop [Hugs_Return   a]       = Finished_Return (fromObj a)
-loop (Hugs_Return   a:r)     = loop (r ++ [Hugs_Return a])
-loop (Hugs_Catch m f1 f2 s:r)= loop (hugs_catch m f1 f2 s : r)
-loop (Hugs_Error    e:_)     = Finished_Error  e
-loop (Hugs_ExitWith i:_)     = Finished_ExitWith i
-loop (Hugs_DeadThread:r)     = loop r
-loop (Hugs_ForkThread a b:r) = loop (a:b:r)
-loop (Hugs_YieldThread a:r)  = loop (r ++ [a])
-loop (Hugs_BlockThread a b:r)= loop (b a : r)
-loop _                       = error "" --"Fatal error in Hugs scheduler"
-
-hugs_catch :: IOResult -> (HugsException -> IOResult) -> (IOError -> IOResult) -> (Obj -> IOResult) -> IOResult
-hugs_catch m f1 f2 s = case primCatchException (catch' m) of
-  Left  exn                   -> f1 exn
-  Right (Hugs_Return a)       -> s a
-  Right (Hugs_Error e)        -> f2 e
-  Right (Hugs_ForkThread a b) -> Hugs_ForkThread (Hugs_Catch a f1 f2 s) b
-  Right (Hugs_YieldThread a)  -> Hugs_YieldThread (Hugs_Catch a f1 f2 s)
-  Right (Hugs_BlockThread a b)-> Hugs_BlockThread (\x -> Hugs_Catch (a x) f1 f2 s) b
-  Right r                     -> r
- where
-  catch' :: IOResult -> IOResult
-  catch' (Hugs_Catch m' f1' f2' s') = catch' (hugs_catch m' f1' f2' s')
-  catch' x                          = x
-
-primExitWith     :: Int -> IO a
-primExitWith c    = IO (\ f s -> Hugs_ExitWith c)
 
 primCompAux      :: Ord a => a -> a -> Ordering -> Ordering
 primCompAux x y o = case compare x y of EQ -> o; LT -> LT; GT -> GT

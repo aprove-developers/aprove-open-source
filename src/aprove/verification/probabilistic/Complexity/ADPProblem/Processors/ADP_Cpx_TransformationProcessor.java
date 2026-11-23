@@ -202,7 +202,7 @@ public abstract class ADP_Cpx_TransformationProcessor extends ADP_Cpx_ProblemPro
         @Override
         public String export(final Export_Util o, final VerbosityLevel level) {
             final StringBuffer s = new StringBuffer();
-            s.append(o.export("By " + this.transformation.getPredicate() + " for the rule ") + o.math(o.export(this.s_to_t)) // Add Citation
+            s.append(o.export("By " + this.transformation.getPredicate() + " " + o.cite(this.transformation.getCitation()) + " for the rule ") + o.math(o.export(this.s_to_t))
                 +
                 (this.position == null ? "" : " at position " + o.export(this.position))
                 + " we obtained the following new ADPs :");

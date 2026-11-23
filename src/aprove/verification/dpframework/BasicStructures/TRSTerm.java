@@ -1740,15 +1740,11 @@ public abstract class TRSTerm
                         }
                     }
                     occA0 = m + varA0;
-                    // anchored either by this occurrence itself (if its closing commutes) or by a
-                    // commuting occurrence nested in one of its variable slots.
-                    if (closingCommutes) {
-                        occA1 = OptionalInt.of(m + varA0);
-                    } else if (bestVarDelta.isPresent()) {
-                        occA1 = OptionalInt.of(m + varA0 + bestVarDelta.getAsInt());
-                    } else {
-                        occA1 = OptionalInt.empty();
-                    }
+                    // anchored either by this occurrence itself (if its closing commutes; then no other
+                    // occurrence of the set may lie strictly below it, so it contributes exactly m) or by
+                    // a commuting occurrence nested in one of its variable slots.
+                    occA1 = maxOpt(closingCommutes ? OptionalInt.of(m) : OptionalInt.empty(),
+                        bestVarDelta.isPresent() ? OptionalInt.of(m + varA0 + bestVarDelta.getAsInt()) : OptionalInt.empty());
                 } else { // MAXOM
                     // Orthogonal: taking this occurrence excludes everything strictly below it, so it
                     // contributes exactly m and can only be anchored by itself.

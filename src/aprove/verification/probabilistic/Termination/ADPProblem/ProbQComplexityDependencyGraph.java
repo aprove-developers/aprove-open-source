@@ -495,8 +495,8 @@ public class ProbQComplexityDependencyGraph implements Immutable {
                     final ProbabilisticRule newDT = newDTNode.getObject();
                     final Set<Pair<TRSFunctionApplication, TRSSubstitution>> connectionSet = calculateConnectionWithUsableTerms(prevDT, newDT);
                     if (!connectionSet.isEmpty()) {
-                        final Set<Pair<TRSFunctionApplication, TRSSubstitution>> connectionStarSet = calculateStarConnectionWithUsableTerms(prevDT, newDT);
-                        if (noStar || !connectionStarSet.isEmpty()) {
+                        // the star check is only applicable if Q is a superset of R or if the PQTRS is non-collapsing
+                        if (noStar || !calculateStarConnectionWithUsableTerms(prevDT, newDT).isEmpty()) {
                             //Add new Edge
                             newGraph.addEdge(prev, newDTNode);
                         }
@@ -515,8 +515,8 @@ public class ProbQComplexityDependencyGraph implements Immutable {
                     final Set<Pair<TRSFunctionApplication, TRSSubstitution>> connectionSet = calculateConnectionWithUsableTerms(newDT, nextDT);
                     if (!connectionSet.isEmpty()) {
 
-                        final Set<Pair<TRSFunctionApplication, TRSSubstitution>> connectionStarSet = calculateStarConnectionWithUsableTerms(newDT, nextDT);
-                        if (noStar || !connectionStarSet.isEmpty()) {
+                        // the star check is only applicable if Q is a superset of R or if the PQTRS is non-collapsing
+                        if (noStar || !calculateStarConnectionWithUsableTerms(newDT, nextDT).isEmpty()) {
                             //Add new Edge
                             newGraph.addEdge(newDTNode, next);
                         }
@@ -535,8 +535,8 @@ public class ProbQComplexityDependencyGraph implements Immutable {
                     final Set<Pair<TRSFunctionApplication, TRSSubstitution>> connectionSet = calculateConnectionWithUsableTerms(newDT, otherNewDT);
                     if (!connectionSet.isEmpty()) {
 
-                        final Set<Pair<TRSFunctionApplication, TRSSubstitution>> connectionStarSet = calculateStarConnectionWithUsableTerms(newDT, otherNewDT);
-                        if (noStar || !connectionStarSet.isEmpty()) {
+                        // the star check is only applicable if Q is a superset of R or if the PQTRS is non-collapsing
+                        if (noStar || !calculateStarConnectionWithUsableTerms(newDT, otherNewDT).isEmpty()) {
                             //Add new Edge
                             newGraph.addEdge(newDTNode, otherNew);
                         }

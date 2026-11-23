@@ -66,7 +66,7 @@ public class PTRS_AST_OutermostToInnermostProcessor extends PTRS_AST_ProblemProc
         @Override
         public String export(final Export_Util o, final VerbosityLevel level) {
             final StringBuilder sb = new StringBuilder();
-            sb.append("We transform the outermost AST problem into an innermost AST problem [Kassing, Diss.]. ")
+            sb.append("We transform the outermost AST problem into an innermost AST problem " + o.cite(Citation.KASSING_DISS) + ". ")
                 .append("Since a PTRS P is outermost AST if the transformed PTRS Trans_o(P) is innermost AST, ")
                 .append("it suffices to analyze innermost AST of the following PTRS Trans_o(P):")
                 .append(o.linebreak())

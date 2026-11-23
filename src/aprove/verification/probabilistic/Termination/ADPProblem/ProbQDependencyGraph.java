@@ -269,11 +269,13 @@ public class ProbQDependencyGraph implements Immutable {
     /**
      * create a new PQRTSProblem where rWithQ are the usable rules and the supProblem satisfies QsuperR.
      * Then the edges in the graph remain identical.
+     * For basic (full) problems, the edges of the super graph are kept as well, which is still an
+     * over-approximation, since rWithQ is a subset of the rules of the super graph.
      * @param sWithQ
      * @param superGraph
      */
     private ProbQDependencyGraph(final PQTRSProblem sWithQ, final ProbQDependencyGraph superGraph) {
-        assert (superGraph.QsuperR);
+        assert (superGraph.QsuperR || sWithQ.isBasic());
         this.transformationInfo = superGraph.transformationInfo;
         this.annoMap = superGraph.annoMap;
         this.capCalculator = sWithQ.getProbQUsableRulesCalculator(this.annoMap);
@@ -464,6 +466,37 @@ public class ProbQDependencyGraph implements Immutable {
         return false;
     }
 
+    /**
+     * computes the usable terms w.r.t. all edges of the graph (not only the edges within SCCs).
+     * This is needed for the reachability graph of basic problems (I,P), where the ADPs of I are not in an SCC.
+     * @return the usable terms (in standard representation)
+     */
+    public Set<TRSFunctionApplication> getUsableTermsOnAllEdges() {
+        final Set<TRSFunctionApplication> res = new HashSet<>();
+        for (final Edge<?, ProbabilisticRule> e : this.g.getEdges()) {
+            for (final Pair<TRSFunctionApplication, TRSSubstitution> pair : calculateConnectionWithUsableTerms(e.getStartNode()
+                .getObject(), e.getEndNode().getObject())) {
+                res.add((TRSFunctionApplication) pair.x.getStandardRenumbered());
+            }
+        }
+        return res;
+    }
+
+    /**
+     * checks whether there are any unusable terms w.r.t. all edges of the graph (see getUsableTermsOnAllEdges)
+     */
+    public boolean doUnusablePairsExistOnAllEdges() {
+        final Set<TRSFunctionApplication> usableTerms = getUsableTermsOnAllEdges();
+        for (final Node<ProbabilisticRule> node : this.g.getNodes()) {
+            for (final TRSFunctionApplication t : node.getObject().getAllAnnoSubterms(this.annoMap.getRLMap())) {
+                if (!usableTerms.contains(t.getStandardRenumbered())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     public boolean isGenuineSCC() {
         final Set<Cycle<ProbabilisticRule>> sccs = this.g.getSCCs();
         return sccs.size() > 0;
@@ -556,8 +589,8 @@ public class ProbQDependencyGraph implements Immutable {
                     final ProbabilisticRule newDT = newDTNode.getObject();
                     final Set<Pair<TRSFunctionApplication, TRSSubstitution>> connectionSet = calculateConnectionWithUsableTerms(prevDT, newDT);
                     if (!connectionSet.isEmpty()) {
-                        final Set<Pair<TRSFunctionApplication, TRSSubstitution>> connectionStarSet = calculateStarConnectionWithUsableTerms(prevDT, newDT);
-                        if (noStar || !connectionStarSet.isEmpty()) {
+                        // the star check is only applicable if Q is a superset of R or if the PQTRS is non-collapsing
+                        if (noStar || !calculateStarConnectionWithUsableTerms(prevDT, newDT).isEmpty()) {
                             //Add new Edge
                             newGraph.addEdge(prev, newDTNode);
                         }
@@ -576,8 +609,8 @@ public class ProbQDependencyGraph implements Immutable {
                     final Set<Pair<TRSFunctionApplication, TRSSubstitution>> connectionSet = calculateConnectionWithUsableTerms(newDT, nextDT);
                     if (!connectionSet.isEmpty()) {
 
-                        final Set<Pair<TRSFunctionApplication, TRSSubstitution>> connectionStarSet = calculateStarConnectionWithUsableTerms(newDT, nextDT);
-                        if (noStar || !connectionStarSet.isEmpty()) {
+                        // the star check is only applicable if Q is a superset of R or if the PQTRS is non-collapsing
+                        if (noStar || !calculateStarConnectionWithUsableTerms(newDT, nextDT).isEmpty()) {
                             //Add new Edge
                             newGraph.addEdge(newDTNode, next);
                         }
@@ -596,8 +629,8 @@ public class ProbQDependencyGraph implements Immutable {
                     final Set<Pair<TRSFunctionApplication, TRSSubstitution>> connectionSet = calculateConnectionWithUsableTerms(newDT, otherNewDT);
                     if (!connectionSet.isEmpty()) {
 
-                        final Set<Pair<TRSFunctionApplication, TRSSubstitution>> connectionStarSet = calculateStarConnectionWithUsableTerms(newDT, otherNewDT);
-                        if (noStar || !connectionStarSet.isEmpty()) {
+                        // the star check is only applicable if Q is a superset of R or if the PQTRS is non-collapsing
+                        if (noStar || !calculateStarConnectionWithUsableTerms(newDT, otherNewDT).isEmpty()) {
                             //Add new Edge
                             newGraph.addEdge(newDTNode, otherNew);
                         }

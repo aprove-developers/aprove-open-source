@@ -61,7 +61,7 @@ public class PTRSProblem extends DefaultBasicObligation implements Immutable {
         this.ruleMap = null;
         final Set<FunctionSymbol> signature = CollectionUtils.getFunctionSymbols(this.PR);
         this.signature = ImmutableCreator.create(signature);
-        this.hashCode = Objects.hash(this.PR);
+        this.hashCode = Objects.hash(this.PR, this.strat, this.target, this.basic);
 
         calculateDefSymbolsAndRuleMap();
     }
@@ -81,7 +81,7 @@ public class PTRSProblem extends DefaultBasicObligation implements Immutable {
         this.ruleMap = null;
         final Set<FunctionSymbol> signature = CollectionUtils.getFunctionSymbols(this.PR);
         this.signature = ImmutableCreator.create(signature);
-        this.hashCode = Objects.hash(this.PR);
+        this.hashCode = Objects.hash(this.PR, this.strat, this.target, this.basic);
 
         calculateDefSymbolsAndRuleMap();
     }
@@ -230,7 +230,7 @@ public class PTRSProblem extends DefaultBasicObligation implements Immutable {
 
     public boolean isDuplicating() {
         for (final ProbabilisticRule rule : getPR()) {
-            if (!rule.isDuplicating()) {
+            if (rule.isDuplicating()) {
                 return true;
             }
         }
@@ -265,7 +265,7 @@ public class PTRSProblem extends DefaultBasicObligation implements Immutable {
 
     public boolean isVariableOccDecreasing() {
         for (final ProbabilisticRule rule : getPR()) {
-            if (!rule.isVariableOccDecreasing()) {
+            if (rule.isVariableOccDecreasing()) {
                 return true;
             }
         }
@@ -530,7 +530,10 @@ public class PTRSProblem extends DefaultBasicObligation implements Immutable {
         }
         final PTRSProblem that = (PTRSProblem) o;
         return this.hashCode == that.hashCode &&
-            Objects.equals(this.PR, that.PR);
+            Objects.equals(this.PR, that.PR) &&
+            this.strat == that.strat &&
+            this.target == that.target &&
+            this.basic == that.basic;
     }
 
     public ImmutableSet<FunctionSymbol> getConstructorsOfR() {

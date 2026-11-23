@@ -107,7 +107,8 @@ public class ADP_Cpx_RuleOverlapInstProcessor extends ADP_Cpx_TransformationProc
                 boolean isCaptured = false;
                 for (final NarrowingPos narrowForTarget : narrowListForTarget) {
                     final TRSSubstitution pi = narrowForTarget.mgu;
-                    if (pi.isInstanceOf(tau)) {
+                    // covered: pi is more general than tau, i.e., tau = pi rho for some rho
+                    if (tau.isInstanceOf(pi)) {
                         isCaptured = true;
                     }
                 }
@@ -187,7 +188,7 @@ public class ADP_Cpx_RuleOverlapInstProcessor extends ADP_Cpx_TransformationProc
 
         final CpxADP_TransformationHeuristic heuristic = new InstantiationVariableHeuristic(ellSharp, newDTs);
 
-        return new Quintuple<>(heuristic, BothBounds.create(), resDTs, resRules, null);
+        return new Quintuple<>(heuristic, UpperBound.create(), resDTs, resRules, null);
     }
 
     /**

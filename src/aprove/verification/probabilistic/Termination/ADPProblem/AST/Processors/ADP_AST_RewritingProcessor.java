@@ -75,7 +75,6 @@ public class ADP_AST_RewritingProcessor extends ADP_AST_TransformationProcessor 
         final Set<Pair<ProbabilisticRule, ProbabilisticRule>> resRules = new LinkedHashSet<>();
 
         final PQTRSProblem qtrs = ast_posqdt.getSwithQ();
-        final ProbQUsableRules usableRules = ast_posqdt.getProbQUsableRulesCalculator();
         final boolean nonOverlapping = qtrs.getCriticalPairs().isNonOverlapping(aborter);
 
         // determine redexes // perhaps cache these results
@@ -110,7 +109,7 @@ public class ADP_AST_RewritingProcessor extends ADP_AST_TransformationProcessor 
                                 final TRSSubstitution matcher = rule.getLeft().getMatcher(subTerm);
                                 if (matcher != null) {
                                     // okay, we can rewrite
-                                    final Set<ProbabilisticRule> localUsableRules = usableRules.getUsableRules(ProbabilisticRule.create(s, subTerm));
+                                    final Set<ProbabilisticRule> localUsableRules = ProbQUsableRules.getUsableRulesOfTerm(subTerm, ruleMap, ast_posqdt.getDeAnnoMap());
                                     final PQTRSProblem localSubPQTRS = qtrs.createSubProblem(ImmutableCreator.create(localUsableRules));
                                     // let us check non-overlappingness
                                     if (nonOverlapping) {
@@ -175,7 +174,7 @@ public class ADP_AST_RewritingProcessor extends ADP_AST_TransformationProcessor 
 
                                     final AST_TransformationHeuristic heuristic = new RewritingHeuristic();
 
-                                    return new Quintuple<>(heuristic, YNMImplication.EQUIVALENT, resDTs, resRules, triple);
+                                    return new Quintuple<>(heuristic, YNMImplication.SOUND, resDTs, resRules, triple);
                                 }
                             }
                         }

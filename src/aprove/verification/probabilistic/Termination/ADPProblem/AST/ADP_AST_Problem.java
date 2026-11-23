@@ -476,7 +476,9 @@ public class ADP_AST_Problem extends DefaultBasicObligation implements
     }
 
     public boolean isInnermost() {
-        return this.sWithQ.QsupersetOfLhsR();
+        // basic ADP problems are only created for full rewriting (if the set of active rules becomes empty
+        // by the usable rules processor, then Q is trivially a superset of lhs(S), but this is no innermost problem)
+        return !this.basic && this.sWithQ.QsupersetOfLhsR();
     }
 
     /**
@@ -613,8 +615,8 @@ public class ADP_AST_Problem extends DefaultBasicObligation implements
             }
         }
 
-        final ProbQDependencyGraph subGraph = this.graph.getUsableRulesSubGraph(this.sWithQ);
         final PQTRSProblem sWithQ = this.sWithQ.createSubProblem(ImmutableCreator.create(basicUsable));
+        final ProbQDependencyGraph subGraph = this.graph.getUsableRulesSubGraph(sWithQ);
 
         final PQTRSProblem newReachRules = this.reachRules.createSubProblem(ImmutableCreator.create(this.basicUsableRules));
         final ProbQDependencyGraph subReachGraph = this.reachGraph.getUsableRulesSubGraph(newReachRules);

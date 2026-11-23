@@ -18,6 +18,7 @@ import aprove.verification.oldframework.Haskell.Collectors.*;
 import aprove.verification.oldframework.Haskell.Expressions.*;
 import aprove.verification.oldframework.Haskell.Modules.*;
 import aprove.verification.oldframework.Haskell.Modules.Module;
+import aprove.verification.oldframework.Haskell.Positivity.*;
 import aprove.verification.oldframework.Haskell.Transformations.*;
 import aprove.verification.oldframework.Input.*;
 import aprove.verification.oldframework.Input.Annotators.*;
@@ -351,6 +352,10 @@ public class Translator extends aprove.verification.oldframework.Input.Translato
             this.setState(mods.buildHaskellProgram());
             //JTreeDialog.create("Modules",new StructureTreeModel(new ReflectTreeEntry("","Modules",mods))).show();
 
+            // H-termination is only sensible for strictly positive data types. This has to be checked after
+            // building the program, since that resolves the type constructors to their declarations.
+            PositivityChecker.check(mods);
+
             final HaskellProgram hp = (HaskellProgram) this.getState();
             String s = "", sep = "";
             for (final String startterm : startterms) {
@@ -383,6 +388,16 @@ public class Translator extends aprove.verification.oldframework.Input.Translato
 
         } catch (final ParserException e) {
             this.handlePLException(e);
+            this.setState(null);
+        } catch (final StrictPositivityException e) {
+            final ParseError pe = new ParseError(ParseError.ERROR);
+            final Token t = e.getToken();
+            if (t != null) {
+                pe.setToken(t.getText());
+                pe.setPosition(t.getLine(), t.getPos());
+            }
+            pe.setMessage(e.getMessage());
+            this.getErrors().add(pe);
             this.setState(null);
         } catch (final LexerException e) {
             this.handlePLException(e);
