@@ -65,8 +65,13 @@ public class IdpCand1ShapeHeuristic implements IdpShapeHeuristic {
         final FunctionSymbol symbol,
         final Abortion aborter) throws AbortionException {
         final Map<FunctionSymbol, Node<PosHierarchy>> map = this.getNodeMap(interpretation);
-        final PosHierarchy hierarchy = map.get(symbol).getObject();
-        return this.universalShape(interpretation, symbol, hierarchy, aborter);
+        final Node<PosHierarchy> node = map.get(symbol);
+        if (node == null) {
+            // The symbol does not occur in the rules, e.g. TRUE if the IDP
+            // does not use booleans. Use the default shape.
+            return null;
+        }
+        return this.universalShape(interpretation, symbol, node.getObject(), aborter);
         /*
         if (hierarchy.maxCombiPos.isEmpty()) {
             return null;

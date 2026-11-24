@@ -614,8 +614,17 @@ public abstract class AbstractInductionCalculus<C extends GPolyCoeff> implements
      * @param cs
      */
     public void reduce(final List<Implication> cs) {
-        final Set<Implication> ncs = new TreeSet<Implication>(new ConstraintComparator());
-        ncs.addAll(cs);
+        final ConstraintComparator comparator = new ConstraintComparator();
+        final List<Implication> ncs = new ArrayList<Implication>();
+        nextConstraint:
+        for (final Implication candidate : cs) {
+            for (final Implication retained : ncs) {
+                if (comparator.isRenamingOf(candidate, retained)) {
+                    continue nextConstraint;
+                }
+            }
+            ncs.add(candidate);
+        }
         cs.clear();
         cs.addAll(ncs);
     }

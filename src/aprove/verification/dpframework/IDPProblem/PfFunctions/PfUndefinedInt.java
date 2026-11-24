@@ -18,17 +18,16 @@ import immutables.*;
 public class PfUndefinedInt extends PredefinedConstructor {
 
     private final FunctionSymbol sym;
-    private final TRSFunctionApplication term;
 
     public PfUndefinedInt(IntegerDomain domain) {
-        super(0, domain);
-        this.sym = FunctionSymbol.create("undefinedInt" + domain.getBits(), 0);
-        this.term = TRSTerm.createFunctionApplication(this.sym, ImmutableCreator.create(new ArrayList<TRSTerm>()));
+        super(1, domain);
+        // The argument is the term that evaluates to the undefined integer
+        this.sym = FunctionSymbol.create("undefinedInt" + domain.getBits(), 1);
     }
 
     @Override
     public TRSFunctionApplication getTerm() {
-        return this.term;
+        throw new UnsupportedOperationException("undefinedInt is unary: build undefinedInt(t) from getSym() and t");
     }
 
     @Override

@@ -530,14 +530,12 @@ public final class AbstractFloat extends AbstractNumber {
     @Override
     public int hashCode() {
         final int prime = 31;
-        int result = super.hashCode();
+        int result = 1;
         result =
             prime
                 * result
                 + ((this.definedness == null) ? 0 : this.definedness.hashCode());
-        long temp;
-        temp = (long) this.literal;
-        result = prime * result + (int) (temp ^ (temp >>> 32));
+        result = prime * result + Double.hashCode(this.literal);
         return result;
     }
 
@@ -549,7 +547,7 @@ public final class AbstractFloat extends AbstractNumber {
         if (this == obj) {
             return true;
         }
-        if (!super.equals(obj)) {
+        if (obj == null) {
             return false;
         }
         if (this.getClass() != obj.getClass()) {
@@ -563,7 +561,7 @@ public final class AbstractFloat extends AbstractNumber {
         } else if (!this.definedness.equals(other.definedness)) {
             return false;
         }
-        if (this.literal != other.literal) {
+        if (Double.compare(this.literal, other.literal) != 0) {
             return false;
         }
         return true;
