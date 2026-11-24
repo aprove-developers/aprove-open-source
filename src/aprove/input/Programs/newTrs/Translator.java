@@ -47,7 +47,11 @@ public class Translator extends TranslatorSkeleton {
             ParseError pe = new ParseError();
             pe.setLine(re.line);
             pe.setColumn(re.charPositionInLine);
-            pe.setMessage(re.getMessage());
+            String message = re.getMessage();
+            if (message == null && re instanceof FailedPredicateException) {
+                message = ((FailedPredicateException) re).predicateText;
+            }
+            pe.setMessage(message != null ? message : re.toString());
             this.getErrors().add(pe);
         } catch (IOException e) {
             ParseError pe = new ParseError();

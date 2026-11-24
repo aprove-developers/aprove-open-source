@@ -251,6 +251,9 @@ public class Equation
     public boolean checkCEquation() {
         if(this.getLeft() instanceof TRSFunctionApplication) {
             final FunctionSymbol f = ((TRSFunctionApplication)this.getLeft()).getRootSymbol();
+            if (f.getArity() != 2) {
+                return false;
+            }
             final TRSTerm x = TRSTerm.createVariable("x");
             final TRSTerm y = TRSTerm.createVariable("y");
             final TRSTerm l = TRSTerm.createFunctionApplication(f,Equation.createArgArrayList(Arrays.asList(x,y)));
@@ -268,6 +271,9 @@ public class Equation
     public boolean checkAEquation() {
         if(this.getLeft() instanceof TRSFunctionApplication) {
             final FunctionSymbol f = ((TRSFunctionApplication)this.getLeft()).getRootSymbol();
+            if (f.getArity() != 2) {
+                return false;
+            }
             final TRSTerm x = TRSTerm.createVariable("x");
             final TRSTerm y = TRSTerm.createVariable("y");
             final TRSTerm z = TRSTerm.createVariable("z");
@@ -292,6 +298,9 @@ public class Equation
             fs.remove(F);
             if(fs.size() == 1) {
                 final FunctionSymbol f = fs.iterator().next();
+                if (F.getArity() != 2 || f.getArity() != 2) {
+                    return false;
+                }
                 final TRSTerm x = TRSTerm.createVariable("x");
                 final TRSTerm y = TRSTerm.createVariable("y");
                 final TRSTerm z = TRSTerm.createVariable("z");

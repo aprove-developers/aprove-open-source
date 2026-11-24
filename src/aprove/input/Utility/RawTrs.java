@@ -40,6 +40,7 @@ public class RawTrs {
     private Set<String> associativeAndCommutativeNames =
         new LinkedHashSet<String>();
     private Set<Rule> relativeRules = new LinkedHashSet<Rule>();
+    private final Set<Equation> equations = new LinkedHashSet<Equation>();
     private Set<ProbabilisticRule> probabilisticRules = null;
     private Map<String, Integer> arityMap =
         new LinkedHashMap<String, Integer>();
@@ -88,9 +89,14 @@ public class RawTrs {
         return null;
     }
 
+    /**
+     * @return the explicitly given equations, e.g., from
+     *         <code>(THEORY (EQUATIONS l == r ...))</code>, that are neither an
+     *         A- nor a C-equation (see {@link #addEquation(TRSTerm, TRSTerm)}).
+     *         Equations of named theories (A, C, AC) are not contained here.
+     */
     public Set<Equation> getEquations() {
-        // TODO Auto-generated method stub
-        return null;
+        return this.equations;
     }
 
     public Set<Rule> getRelativeRules() {
@@ -215,6 +221,26 @@ public class RawTrs {
 
     public void addRelativeRule(Rule r) {
         this.relativeRules.add(r);
+    }
+
+    /**
+     * Adds an explicitly given equation <code>lhs == rhs</code>. Equations
+     * that are an associativity (A) or commutativity (C) equation for some
+     * binary symbol f are stored like the named theories <code>(A f)</code>
+     * and <code>(C f)</code> (both together yield AC), because the ETRS
+     * techniques rely on the standard orientation of these equations that
+     * the named theories produce (see OblCreatorEtrs). All other equations
+     * are kept as they are; they are rejected when creating the obligation.
+     */
+    public void addEquation(TRSTerm lhs, TRSTerm rhs) {
+        Equation equation = Equation.create(lhs, rhs);
+        if (equation.checkAEquation()) {
+            this.addAssociativeName(((TRSFunctionApplication) lhs).getRootSymbol().getName());
+        } else if (equation.checkCEquation()) {
+            this.addCommutativeName(((TRSFunctionApplication) lhs).getRootSymbol().getName());
+        } else {
+            this.equations.add(equation);
+        }
     }
 
     public void addReplacementMapEntry(String name, Set<Integer> replacements) {
