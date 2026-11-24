@@ -29,11 +29,11 @@ public class CriticalPairProblem extends DefaultBasicObligation {
     }
     
     public CriticalPairProblem(final ConfTRSProblem conftrs, Abortion aborter) {
-        this(conftrs.getR(), conftrs.getCriticalPairs(), aborter);
+        this(conftrs.getRules(), conftrs.getCriticalPairs(), aborter);
     }
     
     public CriticalPairProblem(final ImmutableSet<Rule> R,
-                               final Map<FunctionSymbol, ? extends Set<? extends GeneralizedRule>> ruleMap,
+                               final Map<FunctionSymbol, ? extends Set<Rule>> ruleMap,
                                Abortion aborter) {
         this(R, new CriticalPairs(R, ruleMap), aborter);
     }

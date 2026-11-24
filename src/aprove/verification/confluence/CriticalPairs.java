@@ -9,19 +9,18 @@ import aprove.verification.confluence.Utility.*;
 import aprove.verification.dpframework.BasicStructures.*;
 import aprove.verification.oldframework.BasicStructures.*;
 import aprove.verification.oldframework.Logic.*;
-import aprove.verification.oldframework.Utility.*;
 import aprove.verification.oldframework.Utility.GenericStructures.*;
 import immutables.*;
 
 public class CriticalPairs {
 
-    public CriticalPairs(ConfTRSProblem conftrs) {
-        this(conftrs.getR(), conftrs.getRuleMap());
+    public CriticalPairs(ConfTRSProblem confTrsProblem) {
+        this(confTrsProblem.getRules(), confTrsProblem.getRuleMap());
     }
 
     private volatile AbortableIterator<CriticalPairInfo> critPairIterator;
 
-    private Map<FunctionSymbol, ? extends Set<? extends GeneralizedRule>> ruleMap;
+    private Map<FunctionSymbol, ? extends Set<Rule>> ruleMap;
 
     private Boolean gotNonTrivialRootCritpair;
     private Boolean gotNonRootCritpairs;
@@ -29,62 +28,44 @@ public class CriticalPairs {
     private Boolean gotNonTrivialCritpair;
 
     private Collection<Pair<CriticalPairInfo, Integer>> nonJoinableCritPairs;
-    
+
     private Collection<CriticalPairInfo> possibleNCRCritPairs;
 
-    private final List<CriticalPairInfo> allFoundCriticalPairs;
-    
-    private Map<CriticalPairInfo, TRSTerm> foundJoinable;
-    
-    private CriticalPairInfo counterExampleWCR;
-    private Triple<CriticalPairInfo, TRSTerm, TRSTerm> counterExampleCR;
+    private final List<CriticalPairInfo> allFoundCriticalPairs = new ArrayList<>();
 
-    private CPK status;
+    private final Map<CriticalPairInfo, Pair<ImmutableList<RewriteStep>, ImmutableList<RewriteStep>>> foundJoinable = new LinkedHashMap<>();
+
+    private JoinableResult.WcrCounterExample counterExampleWCR;
+    private JoinableResult.NonConfluent counterExampleCR;
+
+    private CPK status = CPK.MAYBE;
     private int limit;
 
-    private YNM allStronglyJoinable;
-    
-    private Map<TRSTerm, TRSTerm> normalFormsReachable;
+    private YNM allStronglyJoinable = YNM.MAYBE;
 
-    public CriticalPairs(final Set<? extends GeneralizedRule> rls,
-                         final Map<FunctionSymbol, ? extends Set<? extends GeneralizedRule>> ruleMap) {
-        if (Globals.useAssertions) {
-            assert (ruleMap != null && rls != null);
-        }
+    private final Map<TRSTerm, ImmutableList<RewriteStep>> normalFormsReachable = new LinkedHashMap<>();
+
+    public CriticalPairs(final Set<Rule> rls,
+                         final Map<FunctionSymbol, ? extends Set<Rule>> ruleMap) {
+        assert !Globals.useAssertions || (ruleMap != null && rls != null);
+
         this.critPairIterator = new CriticalPairGenerator(rls);
-
         this.ruleMap = ruleMap;
-        this.gotNonRootCritpairs = null;
-        this.gotCritpair = null;
-        this.gotNonTrivialRootCritpair = null;
-        this.gotNonTrivialCritpair = null;
         this.nonJoinableCritPairs = ruleMap == null ? null : new LinkedList<>();
-        this.foundJoinable = new LinkedHashMap<CriticalPairInfo, TRSTerm>();
-        this.status = CPK.MAYBE;
-        this.limit = 0;
-
-        this.allFoundCriticalPairs = new ArrayList<>();
-        this.counterExampleWCR = null;
-
-        this.allStronglyJoinable = YNM.MAYBE;
-        
-        this.normalFormsReachable = new LinkedHashMap<TRSTerm, TRSTerm>();
-        
-        this.possibleNCRCritPairs = null;
     }
 
     public List<CriticalPairInfo> getAllFoundCriticalPairs(final Abortion aborter) {
-        if (this.allFoundCriticalPairs == null) {
+        if (this.allFoundCriticalPairs.isEmpty()) {
             this.getNextCritPair(aborter, false);
         }
         return Collections.unmodifiableList(this.allFoundCriticalPairs);
     }
 
-    public CriticalPairInfo getCounterExampleWCR() {
+    public JoinableResult.WcrCounterExample getCounterExampleWCR() {
         return this.counterExampleWCR;
     }
-    
-    public Triple<CriticalPairInfo, TRSTerm, TRSTerm> getCounterExampleCR(){
+
+    public JoinableResult.NonConfluent getCounterExampleCR() {
         return this.counterExampleCR;
     }
 
@@ -128,7 +109,7 @@ public class CriticalPairs {
         }
         return !this.gotNonTrivialRootCritpair;
     }
-    
+
     public synchronized Collection<CriticalPairInfo> getPossibleNCRCritPairs(Abortion aborter){
         if (this.possibleNCRCritPairs == null && !this.status.isDefinitiveAnswer()) {
             this.possibleNCRCritPairs = this.getAllFoundCriticalPairs(aborter).stream()
@@ -137,8 +118,8 @@ public class CriticalPairs {
         }
         return this.possibleNCRCritPairs;
     }
-    
-    public Map<CriticalPairInfo, TRSTerm> getFoundJoinable() {
+
+    public Map<CriticalPairInfo, Pair<ImmutableList<RewriteStep>, ImmutableList<RewriteStep>>> getFoundJoinable() {
         return this.foundJoinable;
     }
 
@@ -149,12 +130,12 @@ public class CriticalPairs {
      * @param aborter
      * @return are the pairs Joinable in one Step
      */
-    private synchronized void ensureStrongJoinabilityIsDetermined(final Abortion aborter) throws AbortionException {
+    public synchronized void ensureStrongJoinabilityIsDetermined(final Abortion aborter) throws AbortionException {
         if (this.allStronglyJoinable != YNM.MAYBE) {
             // Already determined, do nothing.
             return;
         }
-        
+
         if(this.onlyTrivialCriticalPairs(aborter)) {
             this.allStronglyJoinable = YNM.YES;
             this.status = CPK.WCR_DONE;
@@ -163,38 +144,36 @@ public class CriticalPairs {
 
         // This call ensures this.allFoundCriticalPairs is populated.
         this.getNextCritPair(aborter, false);
-        
+
+        // Invalid root symbol
+        if (nonJoinableCritPairs == null)
+            return;
+
         Iterator<Pair<CriticalPairInfo, Integer>> iter = this.nonJoinableCritPairs.iterator();
         while(iter.hasNext()) {
             aborter.checkAbortion();
             Pair<CriticalPairInfo, Integer> pair = iter.next();
             CriticalPairInfo cpInfo = pair.x;
 
-            final JoinRes result = CriticalPairs.critPairIsJoinable(
-                                                                cpInfo.s(),
-                                                                cpInfo.t(),
+            final JoinableResult result = CriticalPairs.critPairIsJoinable(
+                                                                cpInfo,
                                                                 0, // start
                                                                 1, // limit
                                                                 this.ruleMap,
                                                                 this.normalFormsReachable,
                                                                 SearchMode.EXIT_ON_FIRST_JOIN,
                                                                 aborter);
-            
-            final CPT truth = result.truth();
 
-            if (truth != CPT.Joinable) {
+            if (!(result instanceof JoinableResult.Joinable joinable)){
                 this.allStronglyJoinable = YNM.NO;
-                if (truth == CPT.NonConfluent) {
-                  this.handleNonConfluence(result, cpInfo); 
-                }
-                if (truth == CPT.NonJoinable) {
-                    this.handleNonWCR(cpInfo);
-                }
+                if (result instanceof JoinableResult.NonConfluent nonConfluent)
+                    handleNonConfluence(nonConfluent);
+                else if (result instanceof JoinableResult.WcrCounterExample wcrCounterExample)
+                    handleNonWCR(wcrCounterExample);
                 return;
             }
-            this.handleJO(cpInfo, result, iter);
-            
-            
+
+            this.handleJO(cpInfo, joinable, iter);
         }
 
         this.status = CPK.WCR;
@@ -205,15 +184,15 @@ public class CriticalPairs {
         this.ensureStrongJoinabilityIsDetermined(aborter);
         return this.allStronglyJoinable;
     }
-    
+
     public synchronized CPK checkStatusWeak(final int limit, final Abortion aborter) throws AbortionException {
-        
+
         this.ensureStrongJoinabilityIsDetermined(aborter);
-        
+
         if(this.status.isAnyAnswer()) {
             return this.status;
         }
-        
+
         if (this.critPairIterator != null) {
             this.getNextCritPair(aborter, false);
         }
@@ -223,7 +202,7 @@ public class CriticalPairs {
         this.checkJoin(limit, aborter);
         return this.status;
     }
-    
+
     public synchronized CPK checkStatusWeak(final Abortion aborter) throws AbortionException {
         int limit = 8;
         CPK status = null;
@@ -235,7 +214,7 @@ public class CriticalPairs {
         }
         return status;
     }
-    
+
     public synchronized CPK checkStatusDefinitive(final Abortion aborter) throws AbortionException {
         int limit = 8;
         CPK status = null;
@@ -243,13 +222,13 @@ public class CriticalPairs {
             status = this.checkStatusDefinitive(limit, aborter);
             if(this.status.isDefinitiveAnswer())
                 return status;
-            
+
             limit *= 2;
         }
         return status;
     }
-    
-    
+
+
     public synchronized CPK checkStatusDefinitive(final int limit, final Abortion aborter) throws AbortionException {
         this.ensureStrongJoinabilityIsDetermined(aborter);
         if(this.status.isDefinitiveAnswer()) {
@@ -278,7 +257,7 @@ public class CriticalPairs {
      * @param one: only generate one critical pair (true), or generate all critical pairs (false)
      * @throws AbortionException
      */
-    private final void getNextCritPair(final Abortion aborter, final boolean one) throws AbortionException {
+    private void getNextCritPair(final Abortion aborter, final boolean one) throws AbortionException {
         if (this.critPairIterator != null) {
             synchronized (this) {
                 if (this.critPairIterator != null) {
@@ -328,10 +307,8 @@ public class CriticalPairs {
                                 if (si.equals(ti))
                                     continue;
 
-                                if (si instanceof TRSFunctionApplication && ti instanceof TRSFunctionApplication) {
-                                    final TRSFunctionApplication fsi = (TRSFunctionApplication) si;
+                                if (si instanceof TRSFunctionApplication fsi && ti instanceof TRSFunctionApplication gti) {
                                     final FunctionSymbol f = fsi.getRootSymbol();
-                                    final TRSFunctionApplication gti = (TRSFunctionApplication) ti;
                                     final FunctionSymbol g = gti.getRootSymbol();
 
                                     if (this.ruleMap.containsKey(f) || this.ruleMap.containsKey(g)) {
@@ -344,10 +321,11 @@ public class CriticalPairs {
                                             decompositionStack.push(new Pair<>(siArgs.next(), tiArg));
                                         }
                                     } else {
+                                        // Neither f nor g is a valid root function symbol
                                         this.status = CPK.NOTWCR;
                                         this.allStronglyJoinable = YNM.NO;
                                         if (this.counterExampleWCR == null) {
-                                            this.counterExampleWCR = currentCPInfo;
+                                            this.counterExampleWCR = new JoinableResult.WcrCounterExample.InvalidRootSymbol(currentCPInfo.sRule(), currentCPInfo.tRule(), f, g);
                                         }
                                         this.ruleMap = null;
                                         this.nonJoinableCritPairs = null;
@@ -394,10 +372,8 @@ public class CriticalPairs {
             }
         }
     }
-    
-    
-    
-    private final synchronized void checkJoin(final int limit, final Abortion aborter) throws AbortionException {
+
+    private synchronized void checkJoin(final int limit, final Abortion aborter) throws AbortionException {
         if (limit > this.limit && this.status == CPK.MAYBE && this.nonJoinableCritPairs != null) {
             final Iterator<Pair<CriticalPairInfo, Integer>> critPairIter = this.nonJoinableCritPairs.iterator();
             while (critPairIter.hasNext()) {
@@ -405,29 +381,27 @@ public class CriticalPairs {
                 final Pair<CriticalPairInfo, Integer> pair = critPairIter.next();
                 final CriticalPairInfo cpInfo = pair.x;
 
-                final JoinRes result = CriticalPairs.critPairIsJoinable(cpInfo.s(),
-                                                                    cpInfo.t(),
-                                                                    pair.y,
-                                                                    limit,
-                                                                    this.ruleMap,
-                                                                    this.normalFormsReachable,
-                                                                    SearchMode.EXIT_ON_FIRST_JOIN,
-                                                                    aborter);
-                final CPT truth = result.truth();
-                if (truth == CPT.Joinable) {
-                    this.handleJO(cpInfo, result, critPairIter);
-                } else if (truth == CPT.NonJoinable) {
-                    this.status = CPK.NOTWCR;
-                    if (this.counterExampleWCR == null) {
-                        this.counterExampleWCR = cpInfo;
-                    }
-                    //this.ruleMap = null;
-                    //this.nonJoinableCritPairs = null;
+                final JoinableResult result = CriticalPairs.critPairIsJoinable(
+                    cpInfo,
+                    pair.y,
+                    limit,
+                    this.ruleMap,
+                    this.normalFormsReachable,
+                    SearchMode.EXIT_ON_FIRST_JOIN,
+                    aborter
+                );
+
+                if (result instanceof JoinableResult.Joinable joinable) {
+                    handleJO(cpInfo, joinable, critPairIter);
+                }
+                else if (result instanceof JoinableResult.WcrCounterExample.NonJoinable nonJoinable) {
+                    handleNonWCR(nonJoinable);
                     return;
-                } else if (truth == CPT.NonConfluent) {
-                    this.handleNonConfluence(result, cpInfo);
-                    return;
-                } else {
+                }
+                else if (result instanceof JoinableResult.NonConfluent nonConfluent) {
+                    handleNonConfluence(nonConfluent);
+                }
+                else {
                     this.limit = limit;
                     // one might do a return here,
                     // but we also search the other pairs for possible no's
@@ -440,17 +414,17 @@ public class CriticalPairs {
             }
         }
     }
-    
+
     private static boolean CPKIsNCR(CPK cpk) {
         return cpk == CPK.NOTCR || cpk == CPK.NOTCR;
     }
-    
+
     private static boolean cpIsTrivial(CriticalPairInfo cpi)
     {
         return cpi.s().equals(cpi.t());
     }
-    
-    private final synchronized void checkNonConfluence(final int limit, final Abortion aborter) throws AbortionException {
+
+    private synchronized void checkNonConfluence(final int limit, final Abortion aborter) throws AbortionException {
         if(limit <= this.limit || CPKIsNCR(this.status)) {
             return ;
         }
@@ -463,73 +437,48 @@ public class CriticalPairs {
                 critPairIter.remove();
                 continue;
             }
-            final JoinRes result = CriticalPairs.critPairIsJoinable(cpi.s(), cpi.t(), 0, limit, this.ruleMap, normalFormsReachable, SearchMode.EXHAUSTIVE_NON_CONFLUENCE, aborter);
-            
-            final CPT truth = result.truth();
-            if (truth == CPT.NonJoinable) {
-                this.handleNonWCR(cpi);
+
+            final JoinableResult result = CriticalPairs.critPairIsJoinable(cpi, 0, limit, this.ruleMap, normalFormsReachable, SearchMode.EXHAUSTIVE_NON_CONFLUENCE, aborter);
+
+            if (result instanceof JoinableResult.WcrCounterExample.NonJoinable nonJoinable) {
+                this.handleNonWCR(nonJoinable);
                 this.possibleNCRCritPairs = null;
                 return;
             }
-            else if (truth == CPT.NonConfluent) {
-                this.handleNonConfluence(result, cpi);
+            else if (result instanceof JoinableResult.NonConfluent nonConfluent) {
+                this.handleNonConfluence(nonConfluent);
                 this.possibleNCRCritPairs = null;
                 return;
             }
-            else if (truth == CPT.Joinable) {
-                this.handleJO(cpi, result, critPairIter);
+            else if (result instanceof JoinableResult.Joinable joinable) {
+                this.handleJO(cpi, joinable, critPairIter);
             }
         }
-        if(this.possibleNCRCritPairs.isEmpty()) {
+        if (this.possibleNCRCritPairs.isEmpty()) {
             this.status = CPK.WCR_DONE;
         }
     }
-    
-    private void handleNonConfluence(JoinRes result, CriticalPairInfo cpInfo) {
+
+    private void handleNonConfluence(JoinableResult.NonConfluent result) {
         this.status = CPK.NOTCR;
-        TRSTerm s = result.s();
-        TRSTerm t = result.t();
-        this.counterExampleCR = new Triple<CriticalPairInfo, TRSTerm, TRSTerm>(cpInfo, s, t);
+        this.counterExampleCR = result;
     }
-    
-    private void handleNonWCR(CriticalPairInfo cpInfo) {
+
+    private void handleNonWCR(JoinableResult.WcrCounterExample result) {
         this.status = CPK.NOTWCR;
         if (this.counterExampleWCR == null)
-            this.counterExampleWCR = cpInfo;
+            this.counterExampleWCR = result;
     }
-    
-    private <E> void handleJO(CriticalPairInfo cpi, JoinRes result, Iterator<E> iter) {
+
+    private <E> void handleJO(CriticalPairInfo cpi, JoinableResult.Joinable result, Iterator<E> iter) {
         if(!this.foundJoinable.containsKey(cpi))
-            this.foundJoinable.put(cpi, result.s());
+            this.foundJoinable.put(cpi, new Pair<>(result.leftSequence(), result.rightSequence()));
         iter.remove();
     }
-    
-    
-    
 
-    private static final int countSteps = 1 << 6;
-    
-    
-    private record JoinRes(CPT truth, TRSTerm s, TRSTerm t) {
-        static JoinRes create(CPT truth) {
-            return new JoinRes(truth, null, null);
-        }
-        static JoinRes create(CPT truth, TRSTerm n) {
-            return new JoinRes(truth, n, null);
-        }
-        static JoinRes create(CPT truth, TRSTerm s, TRSTerm t) {
-            return new JoinRes(truth, s, t);
-        }
-    };
-    
-    private enum CPT { Joinable, NonJoinable, NonConfluent, Maybe;
-    }
-    
-    
-    private enum SearchMode {
+    public enum SearchMode {
         EXIT_ON_FIRST_JOIN,
         EXHAUSTIVE_NON_CONFLUENCE
-        
     }
 
     /**
@@ -539,122 +488,26 @@ public class CriticalPairs {
      * @param limit a natural number
      * @throws AbortionException
      */
-    static final <T extends GeneralizedRule>
-           JoinRes
-           critPairIsJoinable(final TRSTerm cpLeft,
-                              final TRSTerm cpRight,
-                              final int start,
-                              final int limit,
-                              final Map<FunctionSymbol, ? extends Set<? extends T>> Rls,
-                              Map<TRSTerm, TRSTerm> normalFormCache,
-                              SearchMode searchMode,
-                              final Abortion aborter) throws AbortionException {
-        int count = 0;
-        if (start >= limit) {
-            return JoinRes.create(CPT.Maybe);
-        }
-        boolean isJoinable = false;
-        TRSTerm leftNF = null;
-        TRSTerm rightNF = null;
-        if (normalFormCache != null) {
-            leftNF = normalFormCache.get(cpLeft);
-            rightNF = normalFormCache.get(cpRight);
-            if (leftNF != null && rightNF != null) {
-                if (!leftNF.equals(rightNF)) {
-                    return JoinRes.create(CPT.NonConfluent, leftNF, rightNF);
-                }
-                // else if (searchMode == SearchMode.EXIT_ON_FIRST_JOIN) return JoinRes.create(CPT.Joinable);
-            }
-        }
-        TRSTerm normalForm = rightNF == null ? leftNF : rightNF;
-        TRSTerm joinTerm = null;
-        
-        Set<TRSTerm> leftNewTerms = new LinkedHashSet<>(), leftVeryNewTerms = new LinkedHashSet<>(),
-                rightVeryNewTerms = new LinkedHashSet<>(), rightNewTerms = new LinkedHashSet<>();
-        final Set<TRSTerm> leftAllTerms = new LinkedHashSet<>(), rightAllTerms = new LinkedHashSet<>();
-        leftNewTerms.add(cpLeft);
-        leftAllTerms.add(cpLeft);
-        rightNewTerms.add(cpRight);
-        rightAllTerms.add(cpRight);
-        
-        Set<TRSTerm> exchange;
-        final FreshNameGenerator freshNames = new FreshNameGenerator(FreshNameGenerator.VARIABLES);
-        freshNames.lockNames(CollectionUtils.getNames(cpLeft.getVariables()));
-        freshNames.lockNames(CollectionUtils.getNames(cpRight.getVariables()));
+    static JoinableResult critPairIsJoinable(
+            final CriticalPairInfo criticalPairInfo,
+            final int start,
+            final int limit,
+            final Map<FunctionSymbol, ? extends Set<Rule>> rules,
+            Map<TRSTerm, ImmutableList<RewriteStep>> normalFormCache,
+            SearchMode searchMode,
+            final Abortion aborter) throws AbortionException {
 
-        for (int i = 0; i < limit; i++) {
-            // rewrite only those terms which have not been rewritten yet
-            for (final TRSTerm leftNewTerm : leftNewTerms) {
-                boolean rewritten = false;
-                for (final TRSTerm leftRewriteTerm : leftNewTerm.rewriteGeneralized(Rls, freshNames)) {
-                    rewritten = true;
-                    if ((++count & CriticalPairs.countSteps) == 0)
-                        aborter.checkAbortion();
-                    if (leftAllTerms.add(leftRewriteTerm)) {
-                        if (i >= start && rightAllTerms.contains(leftRewriteTerm)) {
-                            if(searchMode == SearchMode.EXIT_ON_FIRST_JOIN) return JoinRes.create(CPT.Joinable, leftRewriteTerm);
-                            joinTerm = leftRewriteTerm;
-                        }
-                        leftVeryNewTerms.add(leftRewriteTerm);
-                    }
-                }
-                if (!rewritten) {
-                    if (normalFormCache.get(cpLeft) == null) normalFormCache.put(cpLeft, leftNewTerm);
-                    if (normalForm == null) normalForm = leftNewTerm;
-                    else if (!normalForm.equals(leftNewTerm))
-                        return JoinRes.create(CPT.NonConfluent, normalForm, leftNewTerm);
-                }
-            }
-            // for next iteration
-            exchange = leftNewTerms;
-            leftNewTerms = leftVeryNewTerms;
-            leftVeryNewTerms = exchange;
-            leftVeryNewTerms.clear();
-
-            // rewrite only those terms which have not been rewrited yet
-            for (final TRSTerm rightNewTerm : rightNewTerms) {
-                boolean rewritten = false;
-                
-                for (final TRSTerm rightRewriteTerm : rightNewTerm.rewriteGeneralized(Rls, freshNames)) {
-                    rewritten = true;
-                    if ((++count & CriticalPairs.countSteps) == 0)
-                        aborter.checkAbortion();
-                    if (rightAllTerms.add(rightRewriteTerm)) {
-                        if (i >= start && leftAllTerms.contains(rightRewriteTerm)) {
-                            if (searchMode == SearchMode.EXIT_ON_FIRST_JOIN) return JoinRes.create(CPT.Joinable, rightRewriteTerm);
-                            joinTerm = rightRewriteTerm;
-                        }
-                        rightVeryNewTerms.add(rightRewriteTerm);
-                    }
-                }
-                
-                if (!rewritten) {
-                    if (normalFormCache.get(cpRight) == null) normalFormCache.put(cpRight, rightNewTerm);
-                    if (normalForm == null) normalForm = rightNewTerm;
-                    else if (!normalForm.equals(rightNewTerm)) return JoinRes.create(CPT.NonConfluent, normalForm, rightNewTerm);
-                }
-            }
-            //for next iteration
-            exchange = rightNewTerms;
-            rightNewTerms = rightVeryNewTerms;
-            rightVeryNewTerms = exchange;
-            rightVeryNewTerms.clear();
-            if (leftNewTerms.isEmpty() && rightNewTerms.isEmpty()) {
-                if (joinTerm != null) return JoinRes.create(CPT.Joinable, joinTerm);
-                return JoinRes.create(CPT.NonJoinable);
-            }
-        }
-        
-        return JoinRes.create(CPT.Maybe);
+        TrsTermJoinTree joinTree = new TrsTermJoinTree(rules, criticalPairInfo, normalFormCache);
+        return joinTree.areTermsJoinable(start, limit, searchMode, aborter);
     }
-    
+
     // This private inner class is copied from GeneralizedRule.java and modified
     // to produce CriticalPairInfo objects, which include the source rules.
     private static class CriticalPairGenerator implements AbortableIterator<CriticalPairInfo> {
 
         private static final int MASK = 0x20;
-        private final GeneralizedRule[] renumberedRules;
-        private final GeneralizedRule[] originalRules; 
+        private final Rule[] renumberedRules;
+        private final Rule[] originalRules;
         private int posRoot, posOther;
         private final int n, n_minus_1;
         private boolean nextValid;
@@ -662,13 +515,13 @@ public class CriticalPairs {
         private Iterator<Pair<Position, TRSFunctionApplication>> currentOtherPositions;
         private int count = 0;
 
-        private CriticalPairGenerator(Set<? extends GeneralizedRule> rules) {
+        private CriticalPairGenerator(Set<Rule> rules) {
             this.n = rules.size();
             this.n_minus_1 = this.n - 1;
-            this.renumberedRules = new GeneralizedRule[this.n];
-            this.originalRules = new GeneralizedRule[this.n];
+            this.renumberedRules = new Rule[this.n];
+            this.originalRules = new Rule[this.n];
             int i = 0;
-            for (GeneralizedRule rule : rules) {
+            for (Rule rule : rules) {
                 this.originalRules[i] = rule;
                 this.renumberedRules[i] = rule.getWithRenumberedVariables(TRSTerm.SECOND_STANDARD_PREFIX);
                 i++;
@@ -690,12 +543,12 @@ public class CriticalPairs {
             if (this.currentOtherPositions != null) {
                 while (this.posRoot != this.n) {
                     final GeneralizedRule rootRule = this.renumberedRules[this.posRoot];
-                    final GeneralizedRule originalRootRule = this.originalRules[this.posRoot];
+                    final Rule originalRootRule = this.originalRules[this.posRoot];
                     final TRSTerm left = rootRule.getLhsInStandardRepresentation();
                     final TRSTerm right = rootRule.getRhsInStandardRepresentation();
                     while (this.posOther != this.n) {
                         final GeneralizedRule otherRule = this.renumberedRules[this.posOther];
-                        final GeneralizedRule originalOtherRule = this.originalRules[this.posOther]; 
+                        final Rule originalOtherRule = this.originalRules[this.posOther];
                         final TRSTerm otherLeft = otherRule.getLeft();
                         final TRSTerm otherRight = otherRule.getRight();
                         if (this.currentOtherPositions == null) {
@@ -705,20 +558,22 @@ public class CriticalPairs {
                         while (this.currentOtherPositions.hasNext()) {
                             if ((++this.count & CriticalPairGenerator.MASK) == 0)
                                 aborter.checkAbortion();
-                            final Pair<Position, TRSFunctionApplication> posAndSubLeft =
-                                                                                       this.currentOtherPositions.next();
+                            final Pair<Position, TRSFunctionApplication> posAndSubLeft = this.currentOtherPositions.next();
                             final TRSFunctionApplication subLeft = posAndSubLeft.y;
                             final TRSSubstitution sigma = left.getMGU(subLeft);
                             if (sigma != null) {
-                                final TRSTerm s = otherRight.applySubstitution(sigma);
-                                final TRSTerm t = otherLeft.replaceAt(posAndSubLeft.x, right).applySubstitution(sigma);
+                                final TRSTerm s = otherLeft.replaceAt(posAndSubLeft.x, right).applySubstitution(sigma);
+                                final TRSTerm t = otherRight.applySubstitution(sigma);
                                 // Additional Logic, new Crit Pair
                                 final TRSTerm r = otherLeft.applySubstitution(sigma);
-                                this.nextCritPair = new CriticalPairInfo(asSet(originalRootRule, originalOtherRule),
-                                                                         s,
-                                                                         t,
-                                                                         false,
-                                                                         r);
+                                this.nextCritPair = new CriticalPairInfo(
+                                        originalRootRule,
+                                        originalOtherRule,
+                                        s,
+                                        t,
+                                        false,
+                                        r,
+                                        posAndSubLeft.x);
                                 this.nextValid = true;
                                 return;
                             }
@@ -733,13 +588,13 @@ public class CriticalPairs {
                 this.posOther = 1;
             }
             while (this.posRoot != this.n_minus_1) {
-                final GeneralizedRule rootRule = this.renumberedRules[this.posRoot];
-                final GeneralizedRule originalRootRule = this.originalRules[this.posRoot]; // NEW
+                final Rule rootRule = this.renumberedRules[this.posRoot];
+                final Rule originalRootRule = this.originalRules[this.posRoot]; // NEW
                 final TRSTerm left = rootRule.getLhsInStandardRepresentation();
                 final TRSTerm right = rootRule.getRhsInStandardRepresentation();
                 while (this.posOther != this.n) {
-                    final GeneralizedRule otherRule = this.renumberedRules[this.posOther];
-                    final GeneralizedRule originalOtherRule = this.originalRules[this.posOther]; // NEW
+                    final Rule otherRule = this.renumberedRules[this.posOther];
+                    final Rule originalOtherRule = this.originalRules[this.posOther]; // NEW
                     final TRSTerm otherLeft = otherRule.getLeft();
                     this.posOther++;
                     final TRSSubstitution sigma = left.getMGU(otherLeft);
@@ -747,7 +602,7 @@ public class CriticalPairs {
                         final TRSTerm s = right.applySubstitution(sigma);
                         final TRSTerm t = otherRule.getRight().applySubstitution(sigma);
                         final TRSTerm r = left.applySubstitution(sigma);
-                        this.nextCritPair = new CriticalPairInfo(asSet(originalRootRule, originalOtherRule), s, t, true, r);
+                        this.nextCritPair = new CriticalPairInfo(originalRootRule, originalOtherRule, s, t, true, r, Position.EPSILON);
                         this.nextValid = true;
                         return;
                     }
@@ -775,13 +630,6 @@ public class CriticalPairs {
             } else {
                 throw new NoSuchElementException();
             }
-        }
-        
-        private static ImmutableLinkedHashSet<GeneralizedRule> asSet(GeneralizedRule e1, GeneralizedRule e2){
-            Set<GeneralizedRule> i = e1.equals(e2) ? Set.of(e1) : Set.of(e1, e2);
-            final LinkedHashSet<GeneralizedRule> es = i.stream()
-                    .collect(Collectors.toCollection(LinkedHashSet<GeneralizedRule>::new));
-            return ImmutableCreator.create(es);
         }
     }
 }

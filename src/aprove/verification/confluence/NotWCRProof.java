@@ -4,41 +4,51 @@ import java.util.*;
 
 import aprove.prooftree.Export.Utility.*;
 import aprove.prooftree.Proofs.Proof.*;
-import aprove.verification.confluence.Utility.*;
 import aprove.verification.dpframework.BasicStructures.*;
+import aprove.verification.oldframework.BasicStructures.FunctionSymbol;
 import aprove.verification.oldframework.Utility.*;
 
 
 public class NotWCRProof extends DefaultProof {
-    private Collection<GeneralizedRule> rules;
-    private Collection<TRSTerm> terms;
-    private TRSTerm r;
-    
-    public NotWCRProof(CriticalPairInfo disproof) {
-        this.rules = disproof.rules();
-        this.r = disproof.divergence();
-        this.terms = Arrays.asList(disproof.s(), disproof.t());
+    private final JoinableResult.WcrCounterExample result;
+
+    public NotWCRProof(JoinableResult.WcrCounterExample result) {
+        this.result = result;
     }
 
     @Override
     public String export(Export_Util o, VerbosityLevel level) {
-        final Iterator iter = terms.iterator();
-        final StringBuilder s = new StringBuilder();
-        s.append(o.export("The TRS is not locally confluent (WCR):"));
-        s.append(o.cond_linebreak());
-        s.append(o.export("These are the Rules causing the unjoinable critical Pair:"));
-        s.append(o.cond_linebreak());
-        s.append(o.set(rules, Export_Util.RULES));
-        s.append(o.cond_linebreak());
-        s.append(o.export("This leads to the following divergence:"));
-        s.append(o.cond_linebreak());
-        s.append(o.cond_linebreak());
-        s.append(o.export(this.r));
-        s.append(o.export(" ->* <"));
-        s.append(o.export(iter.next()));
-        s.append(o.export(", "));
-        s.append(o.export(iter.next()));
-        s.append(o.export(">"));
-        return s.toString();
+        if (result instanceof JoinableResult.WcrCounterExample.NonJoinable(
+                aprove.verification.confluence.Utility.CriticalPairInfo criticalPairInfo
+        )) {
+            return o.export("The TRS is not locally confluent (WCR):") +
+                o.cond_linebreak() +
+                o.export("These are the Rules causing the unjoinable critical Pair:") +
+                o.cond_linebreak() +
+                o.set(List.of(criticalPairInfo.sRule(), criticalPairInfo.tRule()), Export_Util.RULES) +
+                o.cond_linebreak() +
+                o.export("This leads to the following divergence:") +
+                o.cond_linebreak() +
+                o.cond_linebreak() +
+                o.export(criticalPairInfo.divergence()) +
+                o.export(" ->* <") +
+                o.export(criticalPairInfo.s()) +
+                o.export(", ") +
+                o.export(criticalPairInfo.t()) +
+                o.export(">");
+
+        } else if (result instanceof JoinableResult.WcrCounterExample.InvalidRootSymbol(
+                GeneralizedRule sRule, GeneralizedRule tRule, FunctionSymbol f, FunctionSymbol g
+        )) {
+            return o.export("There are invalid root symbols in the Rules: ") +
+                    o.set(Set.of(sRule, tRule), Export_Util.RULES) +
+                    o.cond_linebreak() +
+                    o.export("The invalid root symbols are: ") +
+                    o.export(f) +
+                    o.export(" and ") +
+                    o.export(g);
+        }
+
+        return "";
     }
 }

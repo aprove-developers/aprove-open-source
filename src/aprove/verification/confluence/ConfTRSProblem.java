@@ -35,7 +35,7 @@ public class ConfTRSProblem extends DefaultBasicObligation
                             HasTRSTerms,
                             ExternUsable {
 
-    private final ImmutableSet<Rule> R;
+    private final ImmutableSet<Rule> rules;
 
     // cached / calculated values
     private final int hashCode;
@@ -72,19 +72,19 @@ public class ConfTRSProblem extends DefaultBasicObligation
 
     /**
      * creates a Confluence Problem for a simple TRS.
-     * @param R - the TRS
+     * @param rules - the TRS
      */
-    private ConfTRSProblem(final ImmutableSet<Rule> R) {
+    private ConfTRSProblem(final ImmutableSet<Rule> rules) {
         super("ConfTRS", "Confluence Problem of a TRS");
-        assert (ConfTRSProblem.checkConstructorArgs(R));
-        this.R = R;
-        this.hashCode = this.R.hashCode() * 849332 + 840213;
+        assert (ConfTRSProblem.checkConstructorArgs(rules));
+        this.rules = rules;
+        this.hashCode = this.rules.hashCode() * 849332 + 840213;
         this.critPairs = null;
         this.maxArity = null;
         this.defSymbolsOfR = null;
         this.ruleMap = null;
         this.reverseRuleMap = null;
-        Set<FunctionSymbol> signature = CollectionUtils.getFunctionSymbols(this.R);
+        Set<FunctionSymbol> signature = CollectionUtils.getFunctionSymbols(this.rules);
         this.signature = ImmutableCreator.create(signature);
         this.calculateDefSymbolsAndRuleMap();
 
@@ -115,21 +115,21 @@ public class ConfTRSProblem extends DefaultBasicObligation
         return new ConfTRSProblem(R, m);
     }
 
-    private ConfTRSProblem(final ImmutableSet<Rule> R, HereditaryProperties m) {
-        this(R);
+    private ConfTRSProblem(final ImmutableSet<Rule> rules, HereditaryProperties m) {
+        this(rules);
         this.isLeftLinear = m.isLeftLinear();
         this.isLinear = m.isLinear();
         this.isNonOverlapping = m.isNonOverlapping();
     }
 
-    private ConfTRSProblem(final ImmutableSet<Rule> R,
+    private ConfTRSProblem(final ImmutableSet<Rule> rules,
                            CriticalPairs critPairs,
                            Integer maxArity,
                            Boolean nonOverlapping,
                            ImmutableSet<FunctionSymbol> defSymbolsOfR,
                            ImmutableMap<FunctionSymbol, ImmutableSet<Rule>> ruleMap,
                            ImmutableMap<FunctionSymbol, ImmutableSet<Rule>> reverseRuleMap) { // Added dps
-        this(R);
+        this(rules);
 
         this.critPairs = critPairs;
         this.maxArity = maxArity;
@@ -170,7 +170,7 @@ public class ConfTRSProblem extends DefaultBasicObligation
         }
 
         final ConfTRSProblem other = (ConfTRSProblem) oth;
-        return this.R.equals(other.R);
+        return this.rules.equals(other.rules);
     }
 
     public YNM getTerminationResult() {
@@ -187,7 +187,7 @@ public class ConfTRSProblem extends DefaultBasicObligation
         if (this.innermostTermination == null) {
             synchronized (this) {
                 if (this.innermostTermination == null) {
-                    this.innermostTermination = QTRSProblem.create(this.getR()).createInnermost();
+                    this.innermostTermination = QTRSProblem.create(this.getRules()).createInnermost();
                 }
             }
         }
@@ -199,8 +199,8 @@ public class ConfTRSProblem extends DefaultBasicObligation
         return this.hashCode;
     }
 
-    public ImmutableSet<Rule> getR() {
-        return this.R;
+    public ImmutableSet<Rule> getRules() {
+        return this.rules;
     }
 
     public boolean isOrthogonal(Abortion aborter) {
@@ -219,7 +219,7 @@ public class ConfTRSProblem extends DefaultBasicObligation
     }
 
     private boolean calculateLeftLinear() {
-        for (Rule rule : this.R)
+        for (Rule rule : this.rules)
             if (!rule.getLeft().isLinear())
                 return false;
 
@@ -238,10 +238,10 @@ public class ConfTRSProblem extends DefaultBasicObligation
     }
 
     private boolean calculateLinearity() {
-        if (this.isLeftLinear() == false)
+        if (!this.isLeftLinear())
             return false;
 
-        for (Rule rule : this.R)
+        for (Rule rule : this.rules)
             if (!rule.getRight().isLinear())
                 return false;
 
@@ -296,7 +296,7 @@ public class ConfTRSProblem extends DefaultBasicObligation
         if (this.termination == null) {
             synchronized (this) {
                 if (this.termination == null) {
-                    this.termination = QTRSProblem.create(this.R);
+                    this.termination = QTRSProblem.create(this.rules);
                 }
             }
         }
@@ -401,7 +401,7 @@ public class ConfTRSProblem extends DefaultBasicObligation
             symbolToNodeMap.put(symbol, n);
         }
 
-        for (final Rule rule : this.R) {
+        for (final Rule rule : this.rules) {
             final FunctionSymbol lhsRootSymbol = rule.getRootSymbol();
             final Node<FunctionSymbol> lhsRootNode = symbolToNodeMap.get(lhsRootSymbol);
 
@@ -539,7 +539,7 @@ public class ConfTRSProblem extends DefaultBasicObligation
                     .filter(Objects::nonNull)
                     .flatMap(Set::stream)
                     .collect(Collectors.toCollection(LinkedHashSet<Rule>::new));
-            if(!rules.isEmpty()) {
+            if (!rules.isEmpty()) {
                 result.add(ImmutableCreator.create(rules));
             }
         }
@@ -547,24 +547,9 @@ public class ConfTRSProblem extends DefaultBasicObligation
     }
 
     private void calculateDefSymbolsAndRuleMap() {
-        final Map<FunctionSymbol, Set<Rule>> ruleMap = new LinkedHashMap<FunctionSymbol, Set<Rule>>();
-        for (final Rule rule : this.R) {
-            final FunctionSymbol f = rule.getRootSymbol();
-            Set<Rule> fRules = ruleMap.get(f);
-            if (fRules == null) {
-                fRules = new LinkedHashSet<Rule>();
-                ruleMap.put(f, fRules);
-            }
-            fRules.add(rule);
-        }
-        // make immutable
-        final Map<FunctionSymbol, ImmutableSet<Rule>> immutableMap =
-                                                                   new LinkedHashMap<FunctionSymbol, ImmutableSet<Rule>>();
-        for (final Map.Entry<FunctionSymbol, Set<Rule>> entry : ruleMap.entrySet()) {
-            immutableMap.put(entry.getKey(), ImmutableCreator.create(entry.getValue()));
-        }
-        this.ruleMap = ImmutableCreator.create(immutableMap);
-        this.defSymbolsOfR = ImmutableCreator.create(immutableMap.keySet());
+        var map = new RuleMap(rules);
+        this.ruleMap = map.ruleMap();
+        this.defSymbolsOfR = map.getDefinedSymbols();
     }
 
     /**
@@ -582,7 +567,7 @@ public class ConfTRSProblem extends DefaultBasicObligation
     }
 
     private void calculateReverseRuleMap() {
-        final Map<FunctionSymbol, Set<Rule>> reverseRuleMap = Rule.getReversedRuleMap(this.R);
+        final Map<FunctionSymbol, Set<Rule>> reverseRuleMap = Rule.getReversedRuleMap(this.rules);
         final Map<FunctionSymbol, ImmutableSet<Rule>> immutableMap =
                                                                    new LinkedHashMap<FunctionSymbol, ImmutableSet<Rule>>();
         for (final Map.Entry<FunctionSymbol, Set<Rule>> entry : reverseRuleMap.entrySet()) {
@@ -678,7 +663,7 @@ public class ConfTRSProblem extends DefaultBasicObligation
      */
     @Override
     public Set<TRSTerm> getTerms() {
-        final Set<TRSTerm> terms = CollectionUtils.getTerms(this.R);
+        final Set<TRSTerm> terms = CollectionUtils.getTerms(this.rules);
         return terms;
     }
 
@@ -687,13 +672,13 @@ public class ConfTRSProblem extends DefaultBasicObligation
         final StringBuilder s = new StringBuilder();
         s.append(o.export("Confluence TRS"));
         s.append(o.cond_linebreak());
-        if (this.R.isEmpty()) {
+        if (this.rules.isEmpty()) {
             s.append("R is empty.");
             s.append(o.linebreak());
         } else {
             s.append(o.export("The TRS R consists of the following rules:"));
             s.append(o.cond_linebreak());
-            s.append(o.set(this.R, Export_Util.RULES));
+            s.append(o.set(this.rules, Export_Util.RULES));
             s.append(o.cond_linebreak());
         }
 
@@ -715,7 +700,7 @@ public class ConfTRSProblem extends DefaultBasicObligation
     @Override
     public String toExternString() {
         final TRSGenerator trsGen = new TRSGenerator();
-        trsGen.writeRules(this.R);
+        trsGen.writeRules(this.rules);
         return trsGen.getTRSString(false, null);
     }
 
@@ -725,7 +710,7 @@ public class ConfTRSProblem extends DefaultBasicObligation
     }
 
     public boolean isRightGround() {
-        for (final Rule rule : this.getR()) {
+        for (final Rule rule : this.getRules()) {
             if (!rule.getRight().getVariables().isEmpty()) {
                 return false;
             }
@@ -739,7 +724,7 @@ public class ConfTRSProblem extends DefaultBasicObligation
         final Element f = XMLTag.QTRS.createElement(doc);
 
         final Element trs = XMLTag.TRS.createElement(doc);
-        CollectionUtils.addChildren(this.R, trs, doc, xmlMetaData);
+        CollectionUtils.addChildren(this.rules, trs, doc, xmlMetaData);
         f.appendChild(trs);
 
         final Element sig = XMLTag.SIGNATURE.createElement(doc);
@@ -753,7 +738,7 @@ public class ConfTRSProblem extends DefaultBasicObligation
     @Override
     public Element getCPFInput(final Document doc, final XMLMetaData xmlMetaData, final TruthValue tv) {
         final Element trsInput = CPFTag.TRS_INPUT.create(doc,
-                                                         CPFTag.trs(doc, xmlMetaData, this.getR()));
+                                                         CPFTag.trs(doc, xmlMetaData, this.getRules()));
 
         final Element strategy = CPFTag.STRATEGY.createElement(doc);
 

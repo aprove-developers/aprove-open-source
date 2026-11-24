@@ -8,13 +8,14 @@ import aprove.prooftree.Proofs.Proof.*;
 import aprove.verification.confluence.Utility.*;
 import aprove.verification.dpframework.BasicStructures.*;
 import aprove.verification.oldframework.Utility.*;
+import aprove.verification.oldframework.Utility.GenericStructures.Pair;
+import immutables.ImmutableList;
 
 public class WCRProof extends DefaultProof {
     
-    private Collection<String> found;
-    
-    
-    public WCRProof(final Map<CriticalPairInfo, TRSTerm> found) {
+    private final Collection<String> found;
+
+    public WCRProof(final Map<CriticalPairInfo, Pair<ImmutableList<RewriteStep>, ImmutableList<RewriteStep>>> found) {
         if (found == null) {
             this.found = Collections.emptyList();
             return;
@@ -24,12 +25,12 @@ public class WCRProof extends DefaultProof {
                 .toList();
     }
     
-    private static String eas(Entry<CriticalPairInfo, TRSTerm> e) {
+    private static String eas(Entry<CriticalPairInfo, Pair<ImmutableList<RewriteStep>, ImmutableList<RewriteStep>>> e) {
         CriticalPairInfo k = e.getKey();
         TRSTerm d = k.divergence();
         TRSTerm s = k.s();
         TRSTerm t = k.t();
-        TRSTerm v = e.getValue();
+        TRSTerm v = e.getValue().getValue().getLast().substitutedTerm();
         return d + " -> <" + s  + ", " + t +"> ->* " + v;
     }
     @Override
